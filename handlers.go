@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/danielmmetz/recipes/db/generated"
+	"github.com/yuin/goldmark"
 )
 
 type server struct {
@@ -69,9 +70,15 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	var mdBuf bytes.Buffer
+	if err := goldmark.Convert([]byte(recipe.Instructions), &mdBuf); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	s.render(w, "view.html", map[string]any{
-		"Recipe":      recipe,
-		"Ingredients": ingredients,
+		"Recipe":           recipe,
+		"Ingredients":      ingredients,
+		"InstructionsHTML": template.HTML(mdBuf.String()),
 	})
 }
 

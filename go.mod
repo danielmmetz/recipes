@@ -3,6 +3,7 @@ module github.com/danielmmetz/recipes
 go 1.25.6
 
 require (
+	github.com/yuin/goldmark v1.7.16
 	golang.org/x/sync v0.19.0
 	modernc.org/sqlite v1.38.2
 )

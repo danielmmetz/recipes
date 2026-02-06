@@ -10,6 +10,10 @@
            {{if .Name}}value="{{.Name}}"{{end}}
            class="flex-1 border border-gray-300 rounded px-2 py-1">
     <button type="button" onclick="this.closest('.ingredient-row').remove()"
-            class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+            class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
+        </svg>
+    </button>
 </div>
 {{end}}
