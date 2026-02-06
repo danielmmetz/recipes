@@ -2,7 +2,22 @@
 {{define "content"}}
 <div class="mb-6">
     <div class="flex justify-between items-start mb-4">
-        <h1 class="text-3xl font-bold text-gray-900">{{.Recipe.Title}}</h1>
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">{{.Recipe.Title}}</h1>
+            {{if .Recipe.Source}}
+            <div class="mt-1">
+                <a href="{{.Recipe.Source}}" target="_blank" rel="noopener noreferrer"
+                   class="text-sm text-gray-500 hover:text-blue-600 hover:underline">{{.Recipe.Source}}</a>
+            </div>
+            {{end}}
+            {{if .Tags}}
+            <div class="mt-1 flex flex-wrap gap-1">
+                {{range .Tags}}
+                <span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{{.Name}}</span>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
         <div class="flex gap-2">
             <a href="/recipes/{{.Recipe.Slug}}/edit" class="bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300">Edit</a>
             <button hx-delete="/recipes/{{.Recipe.Slug}}"

@@ -13,6 +13,15 @@
     </div>
 
     <div>
+        <label for="source" class="block text-sm font-medium text-gray-700 mb-1">Source</label>
+        <p class="text-xs text-gray-500 mb-1">URL or attribution for the original recipe</p>
+        <input type="url" name="source" id="source"
+               value="{{if .IsEdit}}{{.Recipe.Source}}{{end}}"
+               placeholder="https://..."
+               class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
 
         <!-- Ungrouped ingredients -->
@@ -38,6 +47,38 @@
         <label for="instructions" class="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
         <textarea name="instructions" id="instructions" rows="8" required
                   class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">{{if .IsEdit}}{{.Recipe.Instructions}}{{end}}</textarea>
+    </div>
+
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+        <input type="hidden" name="tags" id="tags-hidden"
+               value="{{range $i, $t := .RecipeTags}}{{if $i}}, {{end}}{{$t.Name}}{{end}}">
+
+        <div id="tag-container" class="flex flex-wrap items-center gap-1.5 border border-gray-300 rounded px-2 py-1.5 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 cursor-text"
+             onclick="document.getElementById('new-tag-input').focus()">
+            <!-- Selected tags -->
+            <span id="selected-tags" class="contents">
+            {{range .RecipeTags}}
+            <span class="tag-pill inline-flex items-center bg-blue-100 text-blue-700 text-xs pl-2 pr-1 py-0.5 rounded-full" data-tag="{{.Name}}">
+                {{.Name}}
+                <button type="button" onclick="event.stopPropagation();removeTagPill(this)" class="ml-0.5 hover:text-blue-900 leading-none">&times;</button>
+            </span>
+            {{end}}
+            </span>
+            <!-- Available tags -->
+            <span id="available-tags" class="contents">
+            {{range .AllTags}}
+            <button type="button" data-tag="{{.Name}}" onclick="event.stopPropagation();toggleExistingTag(this)"
+                    class="tag-option text-xs px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors">
+                {{.Name}}
+            </button>
+            {{end}}
+            </span>
+            <!-- Inline new tag input -->
+            <input type="text" id="new-tag-input" placeholder="+ New tag…"
+                   class="text-xs outline-none border-none p-0 m-0 bg-transparent min-w-[5rem] flex-1"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addNewTag();}">
+        </div>
     </div>
 
     <div class="flex gap-3">
@@ -166,10 +207,74 @@ function removeGroup(btn) {
     group.remove();
 }
 
+// --- Tag picker ---
+
+function syncTagsHidden() {
+    var pills = document.querySelectorAll('#selected-tags .tag-pill');
+    var names = [];
+    pills.forEach(function(p) { names.push(p.getAttribute('data-tag')); });
+    document.getElementById('tags-hidden').value = names.join(', ');
+}
+
+function isTagSelected(name) {
+    var pills = document.querySelectorAll('#selected-tags .tag-pill');
+    for (var i = 0; i < pills.length; i++) {
+        if (pills[i].getAttribute('data-tag') === name) return true;
+    }
+    return false;
+}
+
+function addTagPill(name) {
+    var container = document.getElementById('selected-tags');
+    var span = document.createElement('span');
+    span.className = 'tag-pill inline-flex items-center bg-blue-100 text-blue-700 text-xs pl-2 pr-1 py-0.5 rounded-full';
+    span.setAttribute('data-tag', name);
+    span.innerHTML = name +
+        '<button type="button" onclick="event.stopPropagation();removeTagPill(this)" class="ml-0.5 hover:text-blue-900 leading-none">&times;</button>';
+    container.appendChild(span);
+}
+
+function removeTagPill(btn) {
+    var pill = btn.closest('.tag-pill');
+    var name = pill.getAttribute('data-tag');
+    pill.remove();
+    // Show the available-tag button again if it exists
+    var availBtn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
+    if (availBtn) availBtn.classList.remove('hidden');
+    syncTagsHidden();
+}
+
+function toggleExistingTag(btn) {
+    var name = btn.getAttribute('data-tag');
+    if (isTagSelected(name)) return;
+    addTagPill(name);
+    btn.classList.add('hidden');
+    syncTagsHidden();
+}
+
+function addNewTag() {
+    var input = document.getElementById('new-tag-input');
+    var name = input.value.trim();
+    if (!name) return;
+    if (isTagSelected(name)) { input.value = ''; return; }
+    addTagPill(name);
+    // Hide matching available-tag button if it exists
+    var availBtn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
+    if (availBtn) availBtn.classList.add('hidden');
+    syncTagsHidden();
+    input.value = '';
+}
+
 // On page load
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.sortable-ingredients').forEach(initSortable);
     initGroupSortable();
+    // Hide available-tag buttons for already-selected tags
+    document.querySelectorAll('#selected-tags .tag-pill').forEach(function(pill) {
+        var name = pill.getAttribute('data-tag');
+        var btn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
+        if (btn) btn.classList.add('hidden');
+    });
 });
 </script>
 {{end}}

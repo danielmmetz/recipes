@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/danielmmetz/recipes/db/generated"
 	"github.com/yuin/goldmark"
@@ -32,20 +33,81 @@ type ingredientGroupData struct {
 	Ingredients []templateIngredient
 }
 
+// indexRecipe extends Recipe with its tags for display on the index page.
+type indexRecipe struct {
+	generated.Recipe
+	Tags []generated.Tag
+}
+
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	allTags, err := s.queries.ListAllTags(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	selectedTagNames := r.URL.Query()["tag"]
+
 	recipes, err := s.queries.ListRecipes(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "index.html", map[string]any{"Recipes": recipes})
+
+	// Build index recipes with tags, filtering if tags are selected
+	selectedSet := map[string]bool{}
+	for _, t := range selectedTagNames {
+		selectedSet[t] = true
+	}
+
+	var indexRecipes []indexRecipe
+	for _, recipe := range recipes {
+		tags, err := s.queries.ListTagsByRecipeID(r.Context(), recipe.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if len(selectedTagNames) > 0 {
+			// Recipe must have ALL selected tags
+			recipeTagSet := map[string]bool{}
+			for _, t := range tags {
+				recipeTagSet[t.Name] = true
+			}
+			match := true
+			for _, st := range selectedTagNames {
+				if !recipeTagSet[st] {
+					match = false
+					break
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+
+		indexRecipes = append(indexRecipes, indexRecipe{Recipe: recipe, Tags: tags})
+	}
+
+	s.render(w, "index.html", map[string]any{
+		"Recipes":      indexRecipes,
+		"AllTags":       allTags,
+		"SelectedTags":  selectedSet,
+	})
 }
 
 func (s *server) handleNewRecipe(w http.ResponseWriter, r *http.Request) {
+	allTags, err := s.queries.ListAllTags(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	s.render(w, "form.html", map[string]any{
 		"IsEdit":                false,
 		"UngroupedIngredients": []templateIngredient{{UnitGroups: StandardUnitGroups}},
 		"Groups":               []ingredientGroupData{},
+		"AllTags":               allTags,
+		"RecipeTags":            []generated.Tag{},
 	})
 }
 
@@ -56,12 +118,14 @@ func (s *server) handleCreateRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := r.FormValue("title")
+	source := r.FormValue("source")
 	instructions := r.FormValue("instructions")
 	slug := slugify(title)
 
 	recipe, err := s.queries.CreateRecipe(r.Context(), generated.CreateRecipeParams{
 		Slug:         slug,
 		Title:        title,
+		Source:       source,
 		Instructions: instructions,
 	})
 	if err != nil {
@@ -70,6 +134,10 @@ func (s *server) handleCreateRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.createIngredients(r, recipe.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.saveTags(r, recipe.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -96,6 +164,12 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 
 	ungrouped, groupedData := buildGroupedView(ingredients, groups)
 
+	tags, err := s.queries.ListTagsByRecipeID(r.Context(), recipe.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	var mdBuf bytes.Buffer
 	if err := goldmark.Convert([]byte(recipe.Instructions), &mdBuf); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -107,6 +181,7 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		"Groups":               groupedData,
 		"HasIngredients":       len(ingredients) > 0,
 		"InstructionsHTML":     template.HTML(mdBuf.String()),
+		"Tags":                 tags,
 	})
 }
 
@@ -135,11 +210,24 @@ func (s *server) handleEditRecipe(w http.ResponseWriter, r *http.Request) {
 		ungrouped = []templateIngredient{{UnitGroups: StandardUnitGroups}}
 	}
 
+	allTags, err := s.queries.ListAllTags(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	recipeTags, err := s.queries.ListTagsByRecipeID(r.Context(), recipe.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	s.render(w, "form.html", map[string]any{
 		"IsEdit":                true,
 		"Recipe":                recipe,
 		"UngroupedIngredients": ungrouped,
 		"Groups":               groupedData,
+		"AllTags":               allTags,
+		"RecipeTags":            recipeTags,
 	})
 }
 
@@ -151,6 +239,7 @@ func (s *server) handleUpdateRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := r.FormValue("title")
+	source := r.FormValue("source")
 	instructions := r.FormValue("instructions")
 	newSlug := slugify(title)
 
@@ -163,6 +252,7 @@ func (s *server) handleUpdateRecipe(w http.ResponseWriter, r *http.Request) {
 	err = s.queries.UpdateRecipe(r.Context(), generated.UpdateRecipeParams{
 		Title:        title,
 		Slug:         newSlug,
+		Source:       source,
 		Instructions: instructions,
 		Slug_2:       oldSlug,
 	})
@@ -185,6 +275,10 @@ func (s *server) handleUpdateRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := s.saveTags(r, recipe.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("HX-Redirect", "/recipes/"+newSlug)
 	w.WriteHeader(http.StatusOK)
@@ -196,12 +290,43 @@ func (s *server) handleDeleteRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := s.queries.DeleteOrphanedTags(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("HX-Redirect", "/")
 	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handleIngredientRow(w http.ResponseWriter, r *http.Request) {
 	s.partial.ExecuteTemplate(w, "ingredient_row", templateIngredient{UnitGroups: StandardUnitGroups})
+}
+
+func (s *server) saveTags(r *http.Request, recipeID int64) error {
+	if err := s.queries.DeleteRecipeTagsByRecipeID(r.Context(), recipeID); err != nil {
+		return err
+	}
+	tagsRaw := r.FormValue("tags")
+	if tagsRaw == "" {
+		return s.queries.DeleteOrphanedTags(r.Context())
+	}
+	for _, name := range strings.Split(tagsRaw, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		tag, err := s.queries.GetOrCreateTag(r.Context(), name)
+		if err != nil {
+			return err
+		}
+		if err := s.queries.AddRecipeTag(r.Context(), generated.AddRecipeTagParams{
+			RecipeID: recipeID,
+			TagID:    tag.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return s.queries.DeleteOrphanedTags(r.Context())
 }
 
 func (s *server) createIngredients(r *http.Request, recipeID int64) error {

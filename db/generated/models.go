@@ -29,7 +29,18 @@ type Recipe struct {
 	ID           int64
 	Slug         string
 	Title        string
+	Source       string
 	Instructions string
 	CreatedAt    sql.NullTime
 	UpdatedAt    sql.NullTime
+}
+
+type RecipeTag struct {
+	RecipeID int64
+	TagID    int64
+}
+
+type Tag struct {
+	ID   int64
+	Name string
 }

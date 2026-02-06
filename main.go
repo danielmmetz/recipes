@@ -66,6 +66,9 @@ func mainE(ctx context.Context, _ *slog.Logger, listenAddr string) error {
 	// alter and ignore the "duplicate column" error.
 	_, _ = db.ExecContext(ctx, `ALTER TABLE ingredients ADD COLUMN group_id INTEGER REFERENCES ingredient_groups(id) ON DELETE CASCADE`)
 
+	// Migration: add source column to recipes if it doesn't exist.
+	_, _ = db.ExecContext(ctx, `ALTER TABLE recipes ADD COLUMN source TEXT NOT NULL DEFAULT ''`)
+
 	queries := generated.New(db)
 
 	pages := map[string]*template.Template{}

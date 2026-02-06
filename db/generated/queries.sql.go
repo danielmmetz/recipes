@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const addRecipeTag = `-- name: AddRecipeTag :exec
+INSERT OR IGNORE INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)
+`
+
+type AddRecipeTagParams struct {
+	RecipeID int64
+	TagID    int64
+}
+
+func (q *Queries) AddRecipeTag(ctx context.Context, arg AddRecipeTagParams) error {
+	_, err := q.db.ExecContext(ctx, addRecipeTag, arg.RecipeID, arg.TagID)
+	return err
+}
+
 const createIngredient = `-- name: CreateIngredient :exec
 INSERT INTO ingredients (recipe_id, group_id, quantity, unit, name, sort_order) VALUES (?, ?, ?, ?, ?, ?)
 `
@@ -58,22 +72,29 @@ func (q *Queries) CreateIngredientGroup(ctx context.Context, arg CreateIngredien
 }
 
 const createRecipe = `-- name: CreateRecipe :one
-INSERT INTO recipes (slug, title, instructions) VALUES (?, ?, ?) RETURNING id, slug, title, instructions, created_at, updated_at
+INSERT INTO recipes (slug, title, source, instructions) VALUES (?, ?, ?, ?) RETURNING id, slug, title, source, instructions, created_at, updated_at
 `
 
 type CreateRecipeParams struct {
 	Slug         string
 	Title        string
+	Source       string
 	Instructions string
 }
 
 func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Recipe, error) {
-	row := q.db.QueryRowContext(ctx, createRecipe, arg.Slug, arg.Title, arg.Instructions)
+	row := q.db.QueryRowContext(ctx, createRecipe,
+		arg.Slug,
+		arg.Title,
+		arg.Source,
+		arg.Instructions,
+	)
 	var i Recipe
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Title,
+		&i.Source,
 		&i.Instructions,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -99,6 +120,15 @@ func (q *Queries) DeleteIngredientsByRecipeID(ctx context.Context, recipeID int6
 	return err
 }
 
+const deleteOrphanedTags = `-- name: DeleteOrphanedTags :exec
+DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM recipe_tags)
+`
+
+func (q *Queries) DeleteOrphanedTags(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteOrphanedTags)
+	return err
+}
+
 const deleteRecipe = `-- name: DeleteRecipe :exec
 DELETE FROM recipes WHERE slug = ?
 `
@@ -108,8 +138,28 @@ func (q *Queries) DeleteRecipe(ctx context.Context, slug string) error {
 	return err
 }
 
+const deleteRecipeTagsByRecipeID = `-- name: DeleteRecipeTagsByRecipeID :exec
+DELETE FROM recipe_tags WHERE recipe_id = ?
+`
+
+func (q *Queries) DeleteRecipeTagsByRecipeID(ctx context.Context, recipeID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRecipeTagsByRecipeID, recipeID)
+	return err
+}
+
+const getOrCreateTag = `-- name: GetOrCreateTag :one
+INSERT INTO tags (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET name = excluded.name RETURNING id, name
+`
+
+func (q *Queries) GetOrCreateTag(ctx context.Context, name string) (Tag, error) {
+	row := q.db.QueryRowContext(ctx, getOrCreateTag, name)
+	var i Tag
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const getRecipeBySlug = `-- name: GetRecipeBySlug :one
-SELECT id, slug, title, instructions, created_at, updated_at FROM recipes WHERE slug = ? LIMIT 1
+SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes WHERE slug = ? LIMIT 1
 `
 
 func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, error) {
@@ -119,11 +169,39 @@ func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, err
 		&i.ID,
 		&i.Slug,
 		&i.Title,
+		&i.Source,
 		&i.Instructions,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAllTags = `-- name: ListAllTags :many
+SELECT id, name FROM tags ORDER BY name
+`
+
+func (q *Queries) ListAllTags(ctx context.Context) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listAllTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listIngredientGroupsByRecipeID = `-- name: ListIngredientGroupsByRecipeID :many
@@ -194,7 +272,7 @@ func (q *Queries) ListIngredientsByRecipeID(ctx context.Context, recipeID int64)
 }
 
 const listRecipes = `-- name: ListRecipes :many
-SELECT id, slug, title, instructions, created_at, updated_at FROM recipes ORDER BY title
+SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes ORDER BY title
 `
 
 func (q *Queries) ListRecipes(ctx context.Context) ([]Recipe, error) {
@@ -210,6 +288,7 @@ func (q *Queries) ListRecipes(ctx context.Context) ([]Recipe, error) {
 			&i.ID,
 			&i.Slug,
 			&i.Title,
+			&i.Source,
 			&i.Instructions,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -227,13 +306,44 @@ func (q *Queries) ListRecipes(ctx context.Context) ([]Recipe, error) {
 	return items, nil
 }
 
+const listTagsByRecipeID = `-- name: ListTagsByRecipeID :many
+SELECT t.id, t.name FROM tags t
+JOIN recipe_tags rt ON rt.tag_id = t.id
+WHERE rt.recipe_id = ?
+ORDER BY t.name
+`
+
+func (q *Queries) ListTagsByRecipeID(ctx context.Context, recipeID int64) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsByRecipeID, recipeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tag
+	for rows.Next() {
+		var i Tag
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRecipe = `-- name: UpdateRecipe :exec
-UPDATE recipes SET title = ?, slug = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?
+UPDATE recipes SET title = ?, slug = ?, source = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?
 `
 
 type UpdateRecipeParams struct {
 	Title        string
 	Slug         string
+	Source       string
 	Instructions string
 	Slug_2       string
 }
@@ -242,6 +352,7 @@ func (q *Queries) UpdateRecipe(ctx context.Context, arg UpdateRecipeParams) erro
 	_, err := q.db.ExecContext(ctx, updateRecipe,
 		arg.Title,
 		arg.Slug,
+		arg.Source,
 		arg.Instructions,
 		arg.Slug_2,
 	)
