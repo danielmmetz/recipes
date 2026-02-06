@@ -11,9 +11,24 @@
         </div>
     </div>
 
-    {{if .Ingredients}}
+    {{if .HasIngredients}}
     <h2 class="text-xl font-semibold text-gray-800 mb-2">Ingredients</h2>
     <div class="prose text-gray-700 mb-6">
+
+    {{if .UngroupedIngredients}}
+    <ul>
+        {{range .UngroupedIngredients}}
+        <li>
+            {{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}
+            {{if .Unit.Valid}}{{.Unit.String}}{{end}}
+            {{.Name}}
+        </li>
+        {{end}}
+    </ul>
+    {{end}}
+
+    {{range .Groups}}
+    <h3 class="text-lg font-medium text-gray-700 mt-3 mb-1">{{.Name}}</h3>
     <ul>
         {{range .Ingredients}}
         <li>
@@ -23,6 +38,8 @@
         </li>
         {{end}}
     </ul>
+    {{end}}
+
     </div>
     {{end}}
 

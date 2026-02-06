@@ -21,8 +21,6 @@ Creates `recipes.db` in the working directory on first run. Schema is applied au
 
 ### Basics
 
-- [ ] allow re-arranging ingredients (drag handles)
-- [ ] allow grouping ingredients
 - [ ] create and use standard units for ingredients
     - this will also mean updating/migrating existing rows
 

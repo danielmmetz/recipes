@@ -61,6 +61,11 @@ func mainE(ctx context.Context, _ *slog.Logger, listenAddr string) error {
 		return err
 	}
 
+	// Migration: add group_id column to ingredients if it doesn't exist.
+	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we attempt the
+	// alter and ignore the "duplicate column" error.
+	_, _ = db.ExecContext(ctx, `ALTER TABLE ingredients ADD COLUMN group_id INTEGER REFERENCES ingredient_groups(id) ON DELETE CASCADE`)
+
 	queries := generated.New(db)
 
 	pages := map[string]*template.Template{}
@@ -69,6 +74,7 @@ func mainE(ctx context.Context, _ *slog.Logger, listenAddr string) error {
 		t, err := template.New("").Option("missingkey=error").ParseFS(templateFS,
 			"templates/layout.html",
 			"templates/ingredient_row.html",
+			"templates/ingredient_group.html",
 			"templates/"+pf,
 		)
 		if err != nil {

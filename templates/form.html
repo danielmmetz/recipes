@@ -14,16 +14,24 @@
 
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
-        <div id="ingredients" class="space-y-2">
-            {{range .Ingredients}}
+
+        <!-- Ungrouped ingredients -->
+        <div id="ungrouped-ingredients" class="sortable-ingredients space-y-2{{if .UngroupedIngredients}} mb-3{{end}}">
+            {{range .UngroupedIngredients}}
             {{template "ingredient_row" .}}
             {{end}}
         </div>
-        <button type="button"
-                hx-get="/ingredients/row"
-                hx-target="#ingredients"
-                hx-swap="beforeend"
-                class="mt-2 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>
+        <button type="button" onclick="addUngroupedIngredient()"
+                class="mb-3 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>
+
+        <!-- Groups -->
+        <div id="ingredient-groups" class="space-y-3 mb-3">
+            {{range .Groups}}
+            {{template "ingredient_group" .}}
+            {{end}}
+        </div>
+        <button type="button" onclick="addGroup()"
+                class="text-sm text-green-600 hover:underline">+ Add Group</button>
     </div>
 
     <div>
@@ -39,4 +47,113 @@
         <a href="{{if .IsEdit}}/recipes/{{.Recipe.Slug}}{{else}}/{{end}}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">Cancel</a>
     </div>
 </form>
+
+<script>
+// Initialize sortable on all ingredient lists
+function initSortable(el) {
+    Sortable.create(el, {
+        animation: 150,
+        handle: '.drag-handle',
+        group: 'ingredients',
+        draggable: '.ingredient-row',
+        ghostClass: 'bg-blue-50',
+        onEnd: function() { updateAllGroupInputs(); }
+    });
+}
+
+function initGroupSortable() {
+    var el = document.getElementById('ingredient-groups');
+    if (el) {
+        Sortable.create(el, {
+            animation: 150,
+            handle: '.group-drag-handle',
+            draggable: '.ingredient-group',
+            ghostClass: 'bg-green-50',
+        });
+    }
+}
+
+function updateAllGroupInputs() {
+    // Update ungrouped ingredients
+    document.querySelectorAll('#ungrouped-ingredients .ingredient-row').forEach(function(row) {
+        row.querySelector('input[name="ingredient_group[]"]').value = '';
+    });
+    // Update grouped ingredients
+    document.querySelectorAll('.ingredient-group').forEach(function(group) {
+        var name = group.querySelector('.group-name-input').value;
+        group.querySelectorAll('.ingredient-row').forEach(function(row) {
+            row.querySelector('input[name="ingredient_group[]"]').value = name;
+        });
+    });
+}
+
+function updateGroupIngredients(input) {
+    var group = input.closest('.ingredient-group');
+    var name = input.value;
+    group.querySelectorAll('.ingredient-row input[name="ingredient_group[]"]').forEach(function(hidden) {
+        hidden.value = name;
+    });
+}
+
+function addUngroupedIngredient() {
+    var container = document.getElementById('ungrouped-ingredients');
+    var row = createIngredientRow('');
+    container.appendChild(row);
+}
+
+function addIngredientToGroup(btn) {
+    var group = btn.closest('.ingredient-group');
+    var groupName = group.querySelector('.group-name-input').value;
+    var container = group.querySelector('.sortable-ingredients');
+    var row = createIngredientRow(groupName);
+    container.appendChild(row);
+}
+
+function createIngredientRow(groupName) {
+    var div = document.createElement('div');
+    div.className = 'flex gap-2 items-center ingredient-row';
+    div.innerHTML = '<span class="drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none" title="Drag to reorder">☰</span>' +
+        '<input type="number" name="quantity[]" step="any" placeholder="Qty" class="w-20 border border-gray-300 rounded px-2 py-1">' +
+        '<input type="text" name="unit[]" placeholder="Unit" class="w-24 border border-gray-300 rounded px-2 py-1">' +
+        '<input type="text" name="name[]" placeholder="Ingredient name" required class="flex-1 border border-gray-300 rounded px-2 py-1">' +
+        '<input type="hidden" name="ingredient_group[]" value="' + groupName + '">' +
+        '<button type="button" onclick="this.closest(\'.ingredient-row\').remove()" ' +
+        'class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg></button>';
+    return div;
+}
+
+function addGroup() {
+    var container = document.getElementById('ingredient-groups');
+    var div = document.createElement('div');
+    div.className = 'ingredient-group border border-gray-200 rounded-lg p-3 bg-white';
+    div.innerHTML = '<div class="flex gap-2 items-center mb-2 pr-2">' +
+        '<span class="group-drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none text-lg" title="Drag to reorder group">☰</span>' +
+        '<input type="text" placeholder="Group name (e.g. Sauce, Filling)" class="group-name-input flex-1 border border-gray-300 rounded px-2 py-1 font-medium" oninput="updateGroupIngredients(this)">' +
+        '<button type="button" onclick="removeGroup(this)" class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove group">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>' +
+        '</button></div>' +
+        '<div class="sortable-ingredients space-y-2 min-h-[2.5rem] border border-dashed border-gray-200 rounded p-2"></div>' +
+        '<button type="button" onclick="addIngredientToGroup(this)" class="mt-2 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>';
+    container.appendChild(div);
+    initSortable(div.querySelector('.sortable-ingredients'));
+}
+
+function removeGroup(btn) {
+    var group = btn.closest('.ingredient-group');
+    // Move ingredients back to ungrouped
+    var ungrouped = document.getElementById('ungrouped-ingredients');
+    group.querySelectorAll('.ingredient-row').forEach(function(row) {
+        row.querySelector('input[name="ingredient_group[]"]').value = '';
+        ungrouped.appendChild(row);
+    });
+    group.remove();
+}
+
+// On page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.sortable-ingredients').forEach(initSortable);
+    initGroupSortable();
+});
+</script>
 {{end}}

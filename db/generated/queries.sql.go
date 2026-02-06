@@ -11,11 +11,12 @@ import (
 )
 
 const createIngredient = `-- name: CreateIngredient :exec
-INSERT INTO ingredients (recipe_id, quantity, unit, name, sort_order) VALUES (?, ?, ?, ?, ?)
+INSERT INTO ingredients (recipe_id, group_id, quantity, unit, name, sort_order) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateIngredientParams struct {
 	RecipeID  int64
+	GroupID   sql.NullInt64
 	Quantity  sql.NullFloat64
 	Unit      sql.NullString
 	Name      string
@@ -25,12 +26,35 @@ type CreateIngredientParams struct {
 func (q *Queries) CreateIngredient(ctx context.Context, arg CreateIngredientParams) error {
 	_, err := q.db.ExecContext(ctx, createIngredient,
 		arg.RecipeID,
+		arg.GroupID,
 		arg.Quantity,
 		arg.Unit,
 		arg.Name,
 		arg.SortOrder,
 	)
 	return err
+}
+
+const createIngredientGroup = `-- name: CreateIngredientGroup :one
+INSERT INTO ingredient_groups (recipe_id, name, sort_order) VALUES (?, ?, ?) RETURNING id, recipe_id, name, sort_order
+`
+
+type CreateIngredientGroupParams struct {
+	RecipeID  int64
+	Name      string
+	SortOrder int64
+}
+
+func (q *Queries) CreateIngredientGroup(ctx context.Context, arg CreateIngredientGroupParams) (IngredientGroup, error) {
+	row := q.db.QueryRowContext(ctx, createIngredientGroup, arg.RecipeID, arg.Name, arg.SortOrder)
+	var i IngredientGroup
+	err := row.Scan(
+		&i.ID,
+		&i.RecipeID,
+		&i.Name,
+		&i.SortOrder,
+	)
+	return i, err
 }
 
 const createRecipe = `-- name: CreateRecipe :one
@@ -55,6 +79,15 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Rec
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteIngredientGroupsByRecipeID = `-- name: DeleteIngredientGroupsByRecipeID :exec
+DELETE FROM ingredient_groups WHERE recipe_id = ?
+`
+
+func (q *Queries) DeleteIngredientGroupsByRecipeID(ctx context.Context, recipeID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteIngredientGroupsByRecipeID, recipeID)
+	return err
 }
 
 const deleteIngredientsByRecipeID = `-- name: DeleteIngredientsByRecipeID :exec
@@ -93,8 +126,40 @@ func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, err
 	return i, err
 }
 
+const listIngredientGroupsByRecipeID = `-- name: ListIngredientGroupsByRecipeID :many
+SELECT id, recipe_id, name, sort_order FROM ingredient_groups WHERE recipe_id = ? ORDER BY sort_order
+`
+
+func (q *Queries) ListIngredientGroupsByRecipeID(ctx context.Context, recipeID int64) ([]IngredientGroup, error) {
+	rows, err := q.db.QueryContext(ctx, listIngredientGroupsByRecipeID, recipeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IngredientGroup
+	for rows.Next() {
+		var i IngredientGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.RecipeID,
+			&i.Name,
+			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIngredientsByRecipeID = `-- name: ListIngredientsByRecipeID :many
-SELECT id, recipe_id, quantity, unit, name, sort_order FROM ingredients WHERE recipe_id = ? ORDER BY sort_order
+SELECT id, recipe_id, group_id, quantity, unit, name, sort_order FROM ingredients WHERE recipe_id = ? ORDER BY sort_order
 `
 
 func (q *Queries) ListIngredientsByRecipeID(ctx context.Context, recipeID int64) ([]Ingredient, error) {
@@ -109,6 +174,7 @@ func (q *Queries) ListIngredientsByRecipeID(ctx context.Context, recipeID int64)
 		if err := rows.Scan(
 			&i.ID,
 			&i.RecipeID,
+			&i.GroupID,
 			&i.Quantity,
 			&i.Unit,
 			&i.Name,

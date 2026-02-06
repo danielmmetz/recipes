@@ -13,11 +13,20 @@ UPDATE recipes SET title = ?, slug = ?, instructions = ?, updated_at = CURRENT_T
 -- name: DeleteRecipe :exec
 DELETE FROM recipes WHERE slug = ?;
 
+-- name: CreateIngredientGroup :one
+INSERT INTO ingredient_groups (recipe_id, name, sort_order) VALUES (?, ?, ?) RETURNING *;
+
+-- name: ListIngredientGroupsByRecipeID :many
+SELECT * FROM ingredient_groups WHERE recipe_id = ? ORDER BY sort_order;
+
+-- name: DeleteIngredientGroupsByRecipeID :exec
+DELETE FROM ingredient_groups WHERE recipe_id = ?;
+
 -- name: ListIngredientsByRecipeID :many
 SELECT * FROM ingredients WHERE recipe_id = ? ORDER BY sort_order;
 
 -- name: CreateIngredient :exec
-INSERT INTO ingredients (recipe_id, quantity, unit, name, sort_order) VALUES (?, ?, ?, ?, ?);
+INSERT INTO ingredients (recipe_id, group_id, quantity, unit, name, sort_order) VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: DeleteIngredientsByRecipeID :exec
 DELETE FROM ingredients WHERE recipe_id = ?;

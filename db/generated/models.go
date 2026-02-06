@@ -11,8 +11,16 @@ import (
 type Ingredient struct {
 	ID        int64
 	RecipeID  int64
+	GroupID   sql.NullInt64
 	Quantity  sql.NullFloat64
 	Unit      sql.NullString
+	Name      string
+	SortOrder int64
+}
+
+type IngredientGroup struct {
+	ID        int64
+	RecipeID  int64
 	Name      string
 	SortOrder int64
 }
