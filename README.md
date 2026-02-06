@@ -19,11 +19,6 @@ Creates `recipes.db` in the working directory on first run. Schema is applied au
 
 ## TODOs
 
-### Basics
-
-- [ ] create and use standard units for ingredients
-    - this will also mean updating/migrating existing rows
-
 ### Bigger Functionality
 
 - [ ] recipe scaling 

@@ -4,9 +4,16 @@
     <input type="number" name="quantity[]" step="any" placeholder="Qty"
            {{if .Quantity.Valid}}value="{{.Quantity.Float64}}"{{end}}
            class="w-20 border border-gray-300 rounded px-2 py-1">
-    <input type="text" name="unit[]" placeholder="Unit"
-           {{if .Unit.Valid}}value="{{.Unit.String}}"{{end}}
-           class="w-24 border border-gray-300 rounded px-2 py-1">
+    <select name="unit[]" class="w-28 h-[34px] border border-gray-300 rounded px-2 py-1 bg-white">
+        <option value=""{{if not .Unit.Valid}} selected{{end}}>—</option>
+        {{range $.UnitGroups}}
+        <optgroup label="{{.Label}}">
+            {{range .Units}}
+            <option value="{{.Value}}"{{if and $.Unit.Valid (eq $.Unit.String .Value)}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+        </optgroup>
+        {{end}}
+    </select>
     <input type="text" name="name[]" placeholder="Ingredient name" required
            {{if .Name}}value="{{.Name}}"{{end}}
            class="flex-1 border border-gray-300 rounded px-2 py-1">

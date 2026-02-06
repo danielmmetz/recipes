@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -18,10 +19,11 @@ type server struct {
 	partial *template.Template
 }
 
-// templateIngredient extends the generated Ingredient with a GroupName for template rendering.
+// templateIngredient extends the generated Ingredient with a GroupName and UnitGroups for template rendering.
 type templateIngredient struct {
 	generated.Ingredient
-	GroupName string
+	GroupName  string
+	UnitGroups []UnitGroup
 }
 
 // ingredientGroupData holds a group and its ingredients for template rendering.
@@ -42,7 +44,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleNewRecipe(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "form.html", map[string]any{
 		"IsEdit":                false,
-		"UngroupedIngredients": []templateIngredient{{}},
+		"UngroupedIngredients": []templateIngredient{{UnitGroups: StandardUnitGroups}},
 		"Groups":               []ingredientGroupData{},
 	})
 }
@@ -130,7 +132,7 @@ func (s *server) handleEditRecipe(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure at least one empty row for ungrouped if there are none at all
 	if len(ungrouped) == 0 && len(groupedData) == 0 {
-		ungrouped = []templateIngredient{{}}
+		ungrouped = []templateIngredient{{UnitGroups: StandardUnitGroups}}
 	}
 
 	s.render(w, "form.html", map[string]any{
@@ -199,7 +201,7 @@ func (s *server) handleDeleteRecipe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleIngredientRow(w http.ResponseWriter, r *http.Request) {
-	s.partial.ExecuteTemplate(w, "ingredient_row", templateIngredient{})
+	s.partial.ExecuteTemplate(w, "ingredient_row", templateIngredient{UnitGroups: StandardUnitGroups})
 }
 
 func (s *server) createIngredients(r *http.Request, recipeID int64) error {
@@ -244,6 +246,9 @@ func (s *server) createIngredients(r *http.Request, recipeID int64) error {
 		}
 		var unit sql.NullString
 		if i < len(units) && units[i] != "" {
+			if !IsValidUnit(units[i]) {
+				return fmt.Errorf("invalid unit %q for ingredient %q", units[i], name)
+			}
 			unit = sql.NullString{String: units[i], Valid: true}
 		}
 		var groupID sql.NullInt64
@@ -274,7 +279,7 @@ func buildGroupedView(ingredients []generated.Ingredient, groups []generated.Ing
 	var ungrouped []templateIngredient
 	grouped := map[int64][]templateIngredient{}
 	for _, ing := range ingredients {
-		ti := templateIngredient{Ingredient: ing}
+		ti := templateIngredient{Ingredient: ing, UnitGroups: StandardUnitGroups}
 		if ing.GroupID.Valid {
 			ti.GroupName = groupByID[ing.GroupID.Int64]
 			grouped[ing.GroupID.Int64] = append(grouped[ing.GroupID.Int64], ti)

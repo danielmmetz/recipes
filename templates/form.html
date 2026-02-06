@@ -114,7 +114,23 @@ function createIngredientRow(groupName) {
     div.className = 'flex gap-2 items-center ingredient-row';
     div.innerHTML = '<span class="drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none" title="Drag to reorder">☰</span>' +
         '<input type="number" name="quantity[]" step="any" placeholder="Qty" class="w-20 border border-gray-300 rounded px-2 py-1">' +
-        '<input type="text" name="unit[]" placeholder="Unit" class="w-24 border border-gray-300 rounded px-2 py-1">' +
+        '<select name="unit[]" class="w-28 h-[34px] border border-gray-300 rounded px-2 py-1 bg-white">' +
+        '<option value="" selected>—</option>' +
+        '<optgroup label="Volume">' +
+        '<option value="tsp">tsp</option><option value="tbsp">tbsp</option><option value="fl oz">fl oz</option>' +
+        '<option value="cup">cup</option><option value="pt">pt</option><option value="qt">qt</option>' +
+        '<option value="gal">gal</option><option value="mL">mL</option><option value="L">L</option>' +
+        '</optgroup>' +
+        '<optgroup label="Weight">' +
+        '<option value="oz">oz</option><option value="lb">lb</option>' +
+        '<option value="g">g</option><option value="kg">kg</option>' +
+        '</optgroup>' +
+        '<optgroup label="Count / Other">' +
+        '<option value="whole">whole</option><option value="pinch">pinch</option><option value="dash">dash</option>' +
+        '<option value="clove">clove</option><option value="bunch">bunch</option><option value="sprig">sprig</option>' +
+        '<option value="stick">stick</option>' +
+        '</optgroup>' +
+        '</select>' +
         '<input type="text" name="name[]" placeholder="Ingredient name" required class="flex-1 border border-gray-300 rounded px-2 py-1">' +
         '<input type="hidden" name="ingredient_group[]" value="' + groupName + '">' +
         '<button type="button" onclick="this.closest(\'.ingredient-row\').remove()" ' +

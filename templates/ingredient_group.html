@@ -1,0 +1,24 @@
+{{define "ingredient_group"}}
+<div class="ingredient-group border border-gray-200 rounded-lg p-3 bg-white" data-group-name="{{.Name}}">
+    <div class="flex gap-2 items-center mb-2 pr-2">
+        <span class="group-drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none text-lg" title="Drag to reorder group">☰</span>
+        <input type="text" placeholder="Group name (e.g. Sauce, Filling)"
+               value="{{.Name}}"
+               class="group-name-input flex-1 border border-gray-300 rounded px-2 py-1 font-medium"
+               oninput="updateGroupIngredients(this)">
+        <button type="button" onclick="removeGroup(this)"
+                class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove group">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+    <div class="sortable-ingredients space-y-2 min-h-[2.5rem] border border-dashed border-gray-200 rounded p-2">
+        {{range .Ingredients}}
+        {{template "ingredient_row" .}}
+        {{end}}
+    </div>
+    <button type="button" onclick="addIngredientToGroup(this)"
+            class="mt-2 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>
+</div>
+{{end}}
