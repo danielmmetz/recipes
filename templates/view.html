@@ -12,15 +12,33 @@
     </div>
 
     {{if .HasIngredients}}
-    <h2 class="text-xl font-semibold text-gray-800 mb-2">Ingredients</h2>
-    <div class="prose text-gray-700 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xl font-semibold text-gray-800">Ingredients</h2>
+        <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-500">Scale:</span>
+            <div class="inline-flex rounded-md shadow-sm" role="group" id="scale-buttons">
+                <button type="button" data-scale="0.5"
+                    class="scale-btn px-3 py-1 text-sm border border-gray-300 rounded-l-md bg-white text-gray-700 hover:bg-gray-100">½×</button>
+                <button type="button" data-scale="1"
+                    class="scale-btn px-3 py-1 text-sm border-t border-b border-gray-300 bg-blue-600 text-white">1×</button>
+                <button type="button" data-scale="2"
+                    class="scale-btn px-3 py-1 text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">2×</button>
+                <button type="button" data-scale="3"
+                    class="scale-btn px-3 py-1 text-sm border-t border-b border-r border-gray-300 rounded-r-md bg-white text-gray-700 hover:bg-gray-100">3×</button>
+            </div>
+            <input type="number" id="scale-custom" min="0.1" step="any" placeholder="Custom"
+                   class="w-20 text-sm border border-gray-300 rounded px-2 py-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                   title="Enter a custom scale factor">
+        </div>
+    </div>
+    <div class="prose text-gray-700 mb-6" id="ingredients-list">
 
     {{if .UngroupedIngredients}}
     <ul>
         {{range .UngroupedIngredients}}
-        <li>
-            {{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}
-            {{if .Unit.Valid}}{{.Unit.String}}{{end}}
+        <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
+            <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty">{{.Quantity.Float64}}</span>{{end}}
+            {{if .Unit.Valid}}<span class="ingredient-unit">{{.Unit.String}}</span>{{end}}</span>
             {{.Name}}
         </li>
         {{end}}
@@ -31,9 +49,9 @@
     <h3 class="text-lg font-medium text-gray-700 mt-3 mb-1">{{.Name}}</h3>
     <ul>
         {{range .Ingredients}}
-        <li>
-            {{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}
-            {{if .Unit.Valid}}{{.Unit.String}}{{end}}
+        <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
+            <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty">{{.Quantity.Float64}}</span>{{end}}
+            {{if .Unit.Valid}}<span class="ingredient-unit">{{.Unit.String}}</span>{{end}}</span>
             {{.Name}}
         </li>
         {{end}}
@@ -47,4 +65,170 @@
     <div class="prose text-gray-700">{{.InstructionsHTML}}</div>
 </div>
 <a href="/" class="text-blue-600 hover:underline">&larr; Back to all recipes</a>
+
+<script>
+(function() {
+    var customInput = document.getElementById('scale-custom');
+    if (!customInput) return; // no ingredients, nothing to scale
+
+    // Conversion chains: each entry is [unit, multiplier-to-next].
+    // "tsp-base" means 1 of this unit = multiplier tsp, etc.
+    // US Volume chain in tsp: tsp(1) -> tbsp(3) -> cup(48) -> pt(96) -> qt(192) -> gal(768)
+    var usVolume = [
+        { unit: 'tsp',  toBase: 1 },
+        { unit: 'tbsp', toBase: 3 },
+        { unit: 'cup',  toBase: 48 },
+        { unit: 'pt',   toBase: 96 },
+        { unit: 'qt',   toBase: 192 },
+        { unit: 'gal',  toBase: 768 }
+    ];
+    var metricVolume = [
+        { unit: 'mL', toBase: 1 },
+        { unit: 'L',  toBase: 1000 }
+    ];
+    var usWeight = [
+        { unit: 'oz', toBase: 1 },
+        { unit: 'lb', toBase: 16 }
+    ];
+    var metricWeight = [
+        { unit: 'g',  toBase: 1 },
+        { unit: 'kg', toBase: 1000 }
+    ];
+
+    var chains = [usVolume, metricVolume, usWeight, metricWeight];
+
+    // Build lookup: unit string -> { chain, index }
+    var unitLookup = {};
+    chains.forEach(function(chain) {
+        chain.forEach(function(entry, i) {
+            unitLookup[entry.unit] = { chain: chain, index: i };
+        });
+    });
+
+    // Nice cup fractions we snap to (fractional part only)
+    var cupFractions = [
+        { value: 0.25,  label: '¼' },
+        { value: 1/3,   label: '⅓' },
+        { value: 0.5,   label: '½' },
+        { value: 2/3,   label: '⅔' },
+        { value: 0.75,  label: '¾' }
+    ];
+    var SNAP_TOLERANCE = 0.01;
+
+    function formatQty(value) {
+        var rounded = parseFloat(value.toFixed(4));
+        return rounded.toString();
+    }
+
+    // Try to snap a cup value to a nice fraction string.
+    // Returns { qty: string, snapped: true } or { snapped: false }.
+    function trySnapCup(value) {
+        var whole = Math.floor(value);
+        var frac = value - whole;
+
+        // Check if it's essentially a whole number
+        if (Math.abs(frac) < SNAP_TOLERANCE) {
+            return { qty: whole.toString(), snapped: true };
+        }
+        // Check if fractional part matches a nice fraction
+        for (var i = 0; i < cupFractions.length; i++) {
+            if (Math.abs(frac - cupFractions[i].value) < SNAP_TOLERANCE) {
+                if (whole === 0) {
+                    return { qty: cupFractions[i].label, snapped: true };
+                }
+                return { qty: whole + cupFractions[i].label, snapped: true };
+            }
+        }
+        return { snapped: false };
+    }
+
+    // Convert a scaled quantity + original unit to the best display unit.
+    // Returns { qty: string, unit: string }.
+    function convertUnit(scaledQty, originalUnit) {
+        if (!originalUnit || !unitLookup[originalUnit]) {
+            // No unit or not in any chain — just format the number
+            return { qty: formatQty(scaledQty), unit: originalUnit || '' };
+        }
+
+        var info = unitLookup[originalUnit];
+        var chain = info.chain;
+
+        // Convert to base units (smallest in the chain)
+        var baseQty = scaledQty * chain[info.index].toBase;
+
+        // Walk up the chain, pick largest unit where value >= 1
+        var bestIdx = 0;
+        for (var i = chain.length - 1; i >= 0; i--) {
+            var inThisUnit = baseQty / chain[i].toBase;
+            if (inThisUnit >= 1) {
+                bestIdx = i;
+                break;
+            }
+        }
+
+        var bestQty = baseQty / chain[bestIdx].toBase;
+        var bestUnit = chain[bestIdx].unit;
+
+        // Special handling for cups: try to snap to nice fractions
+        if (bestUnit === 'cup') {
+            var snap = trySnapCup(bestQty);
+            if (snap.snapped) {
+                return { qty: snap.qty, unit: 'cup' };
+            }
+            // Doesn't snap — check if falling back to tbsp would be reasonable (< 48 tbsp = 1 cup territory is fine)
+            // Actually per our discussion: just show decimal cups
+            return { qty: formatQty(bestQty), unit: 'cup' };
+        }
+
+        return { qty: formatQty(bestQty), unit: bestUnit };
+    }
+
+    function applyScale(scale) {
+        document.querySelectorAll('.ingredient-item').forEach(function(li) {
+            var baseQty = li.getAttribute('data-base-qty');
+            var baseUnit = li.getAttribute('data-base-unit');
+            var qtyEl = li.querySelector('.ingredient-qty');
+            var unitEl = li.querySelector('.ingredient-unit');
+
+            if (!baseQty) return; // no quantity to scale
+
+            var scaled = parseFloat(baseQty) * scale;
+            var result = convertUnit(scaled, baseUnit);
+
+            if (qtyEl) qtyEl.textContent = result.qty;
+            if (unitEl) unitEl.textContent = result.unit;
+        });
+    }
+
+    function setActiveButton(activeScale) {
+        document.querySelectorAll('.scale-btn').forEach(function(btn) {
+            var s = parseFloat(btn.getAttribute('data-scale'));
+            if (s === activeScale) {
+                btn.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                btn.classList.add('bg-blue-600', 'text-white');
+            } else {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+            }
+        });
+    }
+
+    document.querySelectorAll('.scale-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var scale = parseFloat(this.getAttribute('data-scale'));
+            applyScale(scale);
+            setActiveButton(scale);
+            customInput.value = '';
+        });
+    });
+
+    customInput.addEventListener('input', function() {
+        var val = parseFloat(this.value);
+        if (!isNaN(val) && val > 0) {
+            applyScale(val);
+            setActiveButton(-1); // deselect all preset buttons
+        }
+    });
+})();
+</script>
 {{end}}

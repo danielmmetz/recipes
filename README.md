@@ -21,6 +21,5 @@ Creates `recipes.db` in the working directory on first run. Schema is applied au
 
 ### Bigger Functionality
 
-- [ ] recipe scaling 
 - [ ] tags
 - [ ] import capabilities or similar
