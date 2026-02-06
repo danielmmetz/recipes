@@ -1,0 +1,15 @@
+{{define "ingredient_row"}}
+<div class="flex gap-2 items-center ingredient-row">
+    <input type="number" name="quantity[]" step="any" placeholder="Qty"
+           {{if .Quantity.Valid}}value="{{.Quantity.Float64}}"{{end}}
+           class="w-20 border border-gray-300 rounded px-2 py-1">
+    <input type="text" name="unit[]" placeholder="Unit"
+           {{if .Unit.Valid}}value="{{.Unit.String}}"{{end}}
+           class="w-24 border border-gray-300 rounded px-2 py-1">
+    <input type="text" name="name[]" placeholder="Ingredient name" required
+           {{if .Name}}value="{{.Name}}"{{end}}
+           class="flex-1 border border-gray-300 rounded px-2 py-1">
+    <button type="button" onclick="this.closest('.ingredient-row').remove()"
+            class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+</div>
+{{end}}
