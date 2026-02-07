@@ -1,10 +1,10 @@
 {{define "ingredient_row"}}
-<div class="flex gap-2 items-center ingredient-row" data-group="">
-    <span class="drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none" title="Drag to reorder">☰</span>
+<div class="ingredient-row" data-group="">
+    <span class="drag-handle" title="Drag to reorder">☰</span>
     <input type="number" name="quantity[]" step="any" placeholder="Qty"
            {{if .Quantity.Valid}}value="{{.Quantity.Float64}}"{{end}}
-           class="w-20 border border-gray-300 rounded px-2 py-1">
-    <select name="unit[]" class="w-28 h-[34px] border border-gray-300 rounded px-2 py-1 bg-white">
+           class="form-input qty">
+    <select name="unit[]" class="form-input unit-select">
         <option value=""{{if not .Unit.Valid}} selected{{end}}>—</option>
         {{range $.UnitGroups}}
         <optgroup label="{{.Label}}">
@@ -16,11 +16,11 @@
     </select>
     <input type="text" name="name[]" placeholder="Ingredient name" required
            {{if .Name}}value="{{.Name}}"{{end}}
-           class="flex-1 border border-gray-300 rounded px-2 py-1">
+           class="form-input name">
     <input type="hidden" name="ingredient_group[]" value="{{.GroupName}}">
     <button type="button" onclick="this.closest('.ingredient-row').remove()"
-            class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            class="remove-btn" title="Remove">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
         </svg>
     </button>

@@ -1,94 +1,244 @@
 {{define "title"}}{{.Recipe.Title}}{{end}}
 {{define "content"}}
-<div class="mb-6">
-    <div class="flex justify-between items-start mb-4">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">{{.Recipe.Title}}</h1>
-            {{if .Recipe.Source}}
-            <div class="mt-1">
-                <a href="{{.Recipe.Source}}" target="_blank" rel="noopener noreferrer"
-                   class="text-sm text-gray-500 hover:text-blue-600 hover:underline">{{.Recipe.Source}}</a>
-            </div>
-            {{end}}
-            {{if .Tags}}
-            <div class="mt-1 flex flex-wrap gap-1">
-                {{range .Tags}}
-                <span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{{.Name}}</span>
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        <div class="flex gap-2">
-            <a href="/recipes/{{.Recipe.Slug}}/edit" class="bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300">Edit</a>
-            <button hx-delete="/recipes/{{.Recipe.Slug}}"
-                    hx-confirm="Delete this recipe?"
-                    class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">Delete</button>
-        </div>
-    </div>
+<style>
+    .recipe-header {
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+    }
+    .recipe-header .title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+    }
+    .recipe-header h1 {
+        font-family: 'Source Serif 4', serif;
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    .recipe-header .source {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 3px;
+    }
+    .recipe-header .source a {
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .recipe-header .tags {
+        display: flex;
+        gap: 5px;
+        margin-top: 8px;
+    }
 
-    {{if .HasIngredients}}
-    <div class="flex items-center justify-between mb-2">
-        <h2 class="text-xl font-semibold text-gray-800">Ingredients</h2>
-        <div class="flex items-center gap-2">
-            <span class="text-sm text-gray-500">Scale:</span>
-            <div class="inline-flex rounded-md shadow-sm" role="group" id="scale-buttons">
-                <button type="button" data-scale="0.5"
-                    class="scale-btn px-3 py-1 text-sm border border-gray-300 rounded-l-md bg-white text-gray-700 hover:bg-gray-100">½×</button>
-                <button type="button" data-scale="1"
-                    class="scale-btn px-3 py-1 text-sm border-t border-b border-gray-300 bg-blue-600 text-white">1×</button>
-                <button type="button" data-scale="2"
-                    class="scale-btn px-3 py-1 text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">2×</button>
-                <button type="button" data-scale="3"
-                    class="scale-btn px-3 py-1 text-sm border-t border-b border-r border-gray-300 rounded-r-md bg-white text-gray-700 hover:bg-gray-100">3×</button>
-            </div>
-            <input type="number" id="scale-custom" min="0.1" step="any" placeholder="Custom"
-                   class="w-20 text-sm border border-gray-300 rounded px-2 py-1 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    .recipe-body {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        gap: 32px;
+    }
+    @media (max-width: 640px) {
+        .recipe-body { grid-template-columns: 1fr; gap: 24px; }
+    }
+
+    .ingredients {
+        position: sticky;
+        top: 60px;
+        align-self: start;
+    }
+    .ingredients ul {
+        list-style: none;
+    }
+    .ingredients li {
+        font-size: 13px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border-light);
+    }
+    .ingredients .qty {
+        color: var(--accent);
+        font-weight: 500;
+    }
+    .ingredients .unit {
+        color: var(--text-muted);
+        font-size: 12px;
+    }
+    .ingredients .group-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        margin-top: 12px;
+        margin-bottom: 2px;
+    }
+
+    .scale-bar {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        margin-bottom: 10px;
+    }
+    .scale-bar .scale-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-right: 4px;
+    }
+    .scale-btn {
+        font-family: inherit;
+        font-size: 11px;
+        width: 30px;
+        height: 24px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 4px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        transition: all 0.12s;
+    }
+    .scale-btn.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+    .scale-btn:hover:not(.active) {
+        border-color: var(--accent-light);
+    }
+    #scale-custom {
+        font-family: inherit;
+        font-size: 11px;
+        width: 34px;
+        height: 24px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        text-align: center;
+        color: var(--text-secondary);
+        background: var(--surface);
+        -moz-appearance: textfield;
+    }
+    #scale-custom::-webkit-outer-spin-button,
+    #scale-custom::-webkit-inner-spin-button { -webkit-appearance: none; }
+    #scale-custom:focus {
+        outline: none;
+        border-color: var(--accent-light);
+        box-shadow: 0 0 0 2px rgba(92, 107, 84, 0.12);
+    }
+
+    .instructions ol {
+        padding-left: 18px;
+    }
+    .instructions ol li {
+        font-size: 14px;
+        margin-bottom: 10px;
+        line-height: 1.7;
+    }
+    .instructions ol li::marker {
+        color: var(--accent);
+        font-weight: 600;
+    }
+    .instructions p {
+        font-size: 14px;
+        margin-bottom: 10px;
+        line-height: 1.7;
+    }
+    .instructions ul {
+        padding-left: 18px;
+        margin-bottom: 10px;
+    }
+    .instructions ul li {
+        font-size: 14px;
+        margin-bottom: 4px;
+        line-height: 1.7;
+    }
+
+    .back-link {
+        display: inline-block;
+        margin-top: 36px;
+        font-size: 12px;
+        color: var(--text-muted);
+        text-decoration: none;
+    }
+    .back-link:hover { color: var(--accent); }
+</style>
+
+<div class="recipe-header">
+    <div class="title-row">
+        <h1>{{.Recipe.Title}}</h1>
+        <a href="/recipes/{{.Recipe.Slug}}/edit" class="btn" style="flex-shrink:0;">Edit</a>
+    </div>
+    {{if .Recipe.Source}}
+    <div class="source">
+        From <a href="{{.Recipe.Source}}" target="_blank" rel="noopener noreferrer">{{.Recipe.Source}}</a>
+    </div>
+    {{end}}
+    {{if .Tags}}
+    <div class="tags">
+        {{range .Tags}}
+        <span class="tag-pill">{{.Name}}</span>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+
+{{if .HasIngredients}}
+<div class="recipe-body">
+    <div class="ingredients">
+        <div class="section-label">Ingredients</div>
+        <div class="scale-bar">
+            <span class="scale-label">Scale</span>
+            <button type="button" data-scale="0.5" class="scale-btn">½</button>
+            <button type="button" data-scale="1" class="scale-btn active">1×</button>
+            <button type="button" data-scale="2" class="scale-btn">2×</button>
+            <button type="button" data-scale="3" class="scale-btn">3×</button>
+            <input type="number" id="scale-custom" min="0.1" step="any" placeholder="…"
                    title="Enter a custom scale factor">
         </div>
+        <div id="ingredients-list">
+            {{if .UngroupedIngredients}}
+            <ul>
+                {{range .UngroupedIngredients}}
+                <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
+                    <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty qty">{{fmtQty .Quantity.Float64}}</span>{{end}}
+                    {{if .Unit.Valid}}<span class="ingredient-unit unit">{{.Unit.String}}</span>{{end}}</span>
+                    {{.Name}}
+                </li>
+                {{end}}
+            </ul>
+            {{end}}
+
+            {{range .Groups}}
+            <div class="group-name">{{.Name}}</div>
+            <ul>
+                {{range .Ingredients}}
+                <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
+                    <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty qty">{{fmtQty .Quantity.Float64}}</span>{{end}}
+                    {{if .Unit.Valid}}<span class="ingredient-unit unit">{{.Unit.String}}</span>{{end}}</span>
+                    {{.Name}}
+                </li>
+                {{end}}
+            </ul>
+            {{end}}
+        </div>
     </div>
-    <div class="prose text-gray-700 mb-6" id="ingredients-list">
 
-    {{if .UngroupedIngredients}}
-    <ul>
-        {{range .UngroupedIngredients}}
-        <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
-            <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty">{{fmtQty .Quantity.Float64}}</span>{{end}}
-            {{if .Unit.Valid}}<span class="ingredient-unit">{{.Unit.String}}</span>{{end}}</span>
-            {{.Name}}
-        </li>
-        {{end}}
-    </ul>
-    {{end}}
-
-    {{range .Groups}}
-    <h3 class="text-lg font-medium text-gray-700 mt-3 mb-1">{{.Name}}</h3>
-    <ul>
-        {{range .Ingredients}}
-        <li class="ingredient-item" data-base-qty="{{if .Quantity.Valid}}{{.Quantity.Float64}}{{end}}" data-base-unit="{{if .Unit.Valid}}{{.Unit.String}}{{end}}">
-            <span class="ingredient-measure">{{if .Quantity.Valid}}<span class="ingredient-qty">{{fmtQty .Quantity.Float64}}</span>{{end}}
-            {{if .Unit.Valid}}<span class="ingredient-unit">{{.Unit.String}}</span>{{end}}</span>
-            {{.Name}}
-        </li>
-        {{end}}
-    </ul>
-    {{end}}
-
+    <div class="instructions">
+        <div class="section-label">Instructions</div>
+        {{.InstructionsHTML}}
     </div>
-    {{end}}
-
-    <h2 class="text-xl font-semibold text-gray-800 mb-2">Instructions</h2>
-    <div class="prose text-gray-700">{{.InstructionsHTML}}</div>
 </div>
-<a href="/" class="text-blue-600 hover:underline">&larr; Back to all recipes</a>
+{{else}}
+<div class="instructions">
+    <div class="section-label">Instructions</div>
+    {{.InstructionsHTML}}
+</div>
+{{end}}
+
+<a href="/" class="back-link">← All recipes</a>
 
 <script>
 (function() {
     var customInput = document.getElementById('scale-custom');
-    if (!customInput) return; // no ingredients, nothing to scale
+    if (!customInput) return;
 
-    // Conversion chains: each entry is [unit, multiplier-to-next].
-    // "tsp-base" means 1 of this unit = multiplier tsp, etc.
-    // US Volume chain in tsp: tsp(1) -> tbsp(3) -> cup(48) -> pt(96) -> qt(192) -> gal(768)
     var usVolume = [
         { unit: 'tsp',  toBase: 1 },
         { unit: 'tbsp', toBase: 3 },
@@ -111,8 +261,6 @@
     ];
 
     var chains = [usVolume, metricVolume, usWeight, metricWeight];
-
-    // Build lookup: unit string -> { chain, index }
     var unitLookup = {};
     chains.forEach(function(chain) {
         chain.forEach(function(entry, i) {
@@ -121,8 +269,6 @@
     });
 
     var SNAP_TOLERANCE = 0.001;
-
-    // Common fractions for display (sorted by value)
     var niceFractions = [
         { value: 1/8, label: '⅛' },
         { value: 1/6, label: '⅙' },
@@ -137,89 +283,52 @@
         { value: 7/8, label: '⅞' }
     ];
 
-    // Format a quantity as a nice string, using vulgar fractions when possible.
     function formatQty(value) {
         var whole = Math.floor(value);
         var frac = value - whole;
-
-        // Essentially a whole number
-        if (frac < SNAP_TOLERANCE) {
-            return whole.toString();
-        }
-        // Rounds up to next whole
-        if (1 - frac < SNAP_TOLERANCE) {
-            return (whole + 1).toString();
-        }
-        // Try to match a nice fraction
+        if (frac < SNAP_TOLERANCE) return whole.toString();
+        if (1 - frac < SNAP_TOLERANCE) return (whole + 1).toString();
         for (var i = 0; i < niceFractions.length; i++) {
             if (Math.abs(frac - niceFractions[i].value) < SNAP_TOLERANCE) {
                 if (whole === 0) return niceFractions[i].label;
                 return whole + niceFractions[i].label;
             }
         }
-        // Fallback: compact decimal
-        var rounded = parseFloat(value.toFixed(4));
-        return rounded.toString();
+        return parseFloat(value.toFixed(4)).toString();
     }
 
-    // Try to snap a cup value to a nice fraction string.
-    // Returns { qty: string, snapped: true } or { snapped: false }.
     function trySnapCup(value) {
         var whole = Math.floor(value);
         var frac = value - whole;
-
-        if (Math.abs(frac) < SNAP_TOLERANCE) {
-            return { qty: whole.toString(), snapped: true };
-        }
+        if (Math.abs(frac) < SNAP_TOLERANCE) return { qty: whole.toString(), snapped: true };
         for (var i = 0; i < niceFractions.length; i++) {
             if (Math.abs(frac - niceFractions[i].value) < SNAP_TOLERANCE) {
-                if (whole === 0) {
-                    return { qty: niceFractions[i].label, snapped: true };
-                }
+                if (whole === 0) return { qty: niceFractions[i].label, snapped: true };
                 return { qty: whole + niceFractions[i].label, snapped: true };
             }
         }
         return { snapped: false };
     }
 
-    // Convert a scaled quantity + original unit to the best display unit.
-    // Returns { qty: string, unit: string }.
     function convertUnit(scaledQty, originalUnit) {
         if (!originalUnit || !unitLookup[originalUnit]) {
-            // No unit or not in any chain — just format the number
             return { qty: formatQty(scaledQty), unit: originalUnit || '' };
         }
-
         var info = unitLookup[originalUnit];
         var chain = info.chain;
-
-        // Convert to base units (smallest in the chain)
         var baseQty = scaledQty * chain[info.index].toBase;
-
-        // Walk up the chain, pick largest unit where value >= 1
         var bestIdx = 0;
         for (var i = chain.length - 1; i >= 0; i--) {
             var inThisUnit = baseQty / chain[i].toBase;
-            if (inThisUnit >= 1) {
-                bestIdx = i;
-                break;
-            }
+            if (inThisUnit >= 1) { bestIdx = i; break; }
         }
-
         var bestQty = baseQty / chain[bestIdx].toBase;
         var bestUnit = chain[bestIdx].unit;
-
-        // Special handling for cups: try to snap to nice fractions
         if (bestUnit === 'cup') {
             var snap = trySnapCup(bestQty);
-            if (snap.snapped) {
-                return { qty: snap.qty, unit: 'cup' };
-            }
-            // Doesn't snap — check if falling back to tbsp would be reasonable (< 48 tbsp = 1 cup territory is fine)
-            // Actually per our discussion: just show decimal cups
+            if (snap.snapped) return { qty: snap.qty, unit: 'cup' };
             return { qty: formatQty(bestQty), unit: 'cup' };
         }
-
         return { qty: formatQty(bestQty), unit: bestUnit };
     }
 
@@ -229,12 +338,9 @@
             var baseUnit = li.getAttribute('data-base-unit');
             var qtyEl = li.querySelector('.ingredient-qty');
             var unitEl = li.querySelector('.ingredient-unit');
-
-            if (!baseQty) return; // no quantity to scale
-
+            if (!baseQty) return;
             var scaled = parseFloat(baseQty) * scale;
             var result = convertUnit(scaled, baseUnit);
-
             if (qtyEl) qtyEl.textContent = result.qty;
             if (unitEl) unitEl.textContent = result.unit;
         });
@@ -244,11 +350,9 @@
         document.querySelectorAll('.scale-btn').forEach(function(btn) {
             var s = parseFloat(btn.getAttribute('data-scale'));
             if (s === activeScale) {
-                btn.classList.remove('bg-white', 'text-gray-700', 'hover:bg-gray-100');
-                btn.classList.add('bg-blue-600', 'text-white');
+                btn.classList.add('active');
             } else {
-                btn.classList.remove('bg-blue-600', 'text-white');
-                btn.classList.add('bg-white', 'text-gray-700', 'hover:bg-gray-100');
+                btn.classList.remove('active');
             }
         });
     }
@@ -266,7 +370,7 @@
         var val = parseFloat(this.value);
         if (!isNaN(val) && val > 0) {
             applyScale(val);
-            setActiveButton(-1); // deselect all preset buttons
+            setActiveButton(-1);
         }
     });
 })();

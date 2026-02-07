@@ -1,41 +1,166 @@
 {{define "title"}}Recipes{{end}}
 {{define "content"}}
-<div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold text-gray-900">All Recipes</h1>
-    <a href="/recipes/new" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">New Recipe</a>
-</div>
+<style>
+    .page-title {
+        font-family: 'Source Serif 4', serif;
+        font-size: 26px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .page-subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+    }
+    .tag-bar {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+        align-items: center;
+    }
+    .tag-bar .tag {
+        font-family: inherit;
+        font-size: 12px;
+        padding: 3px 11px;
+        border-radius: var(--radius-full);
+        border: 1px solid transparent;
+        color: var(--text-secondary);
+        background: var(--accent-bg);
+        cursor: pointer;
+        transition: all 0.12s;
+    }
+    .tag-bar .tag:hover {
+        background: #e4e3dd;
+        color: var(--text);
+    }
+    .tag-bar .tag.active {
+        background: var(--accent);
+        color: #fff;
+    }
+    .tag-bar .clear-link {
+        font-size: 11px;
+        color: var(--danger);
+        text-decoration: none;
+        margin-left: 4px;
+    }
+    .tag-bar .clear-link:hover { text-decoration: underline; }
+    .recipe-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    @media (max-width: 480px) {
+        .recipe-grid { grid-template-columns: 1fr; }
+    }
+    .recipe-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        display: flex;
+        flex-direction: column;
+    }
+    .recipe-card:hover {
+        border-color: var(--accent-light);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        text-decoration: none;
+    }
+    .recipe-card .card-title {
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.3;
+        margin-bottom: 4px;
+        color: var(--text);
+    }
+    .recipe-card .card-tags {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .empty-state {
+        color: var(--text-muted);
+        font-size: 14px;
+    }
+
+    /* Dropdown menu */
+    .dropdown { position: relative; display: inline-block; }
+    .dropdown-menu {
+        position: absolute;
+        left: 0;
+        margin-top: 4px;
+        width: 220px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        z-index: 10;
+        padding: 4px 0;
+    }
+    .dropdown-menu label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-secondary);
+        transition: background 0.1s;
+    }
+    .dropdown-menu label:hover { background: var(--accent-bg); }
+    .dropdown-menu input[type="checkbox"] {
+        accent-color: var(--accent);
+    }
+    .selected-pills {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-left: 10px;
+    }
+    .selected-pills .tag-pill a {
+        color: inherit;
+        text-decoration: none;
+        margin-left: 2px;
+        font-size: 14px;
+        line-height: 1;
+    }
+    .selected-pills .tag-pill a:hover { color: var(--text); }
+</style>
+
+<h1 class="page-title">All Recipes</h1>
+<p class="page-subtitle">{{len .Recipes}} recipe{{if ne (len .Recipes) 1}}s{{end}}</p>
 
 {{if .AllTags}}
-<form method="GET" action="/" id="tag-filter-form" class="mb-6">
-    <div class="relative inline-block" id="tag-dropdown">
-        <button type="button" id="tag-dropdown-btn"
-                class="inline-flex items-center gap-2 border border-gray-300 rounded px-3 py-2 bg-white text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+<form method="GET" action="/" id="tag-filter-form" class="tag-bar">
+    <div class="dropdown" id="tag-dropdown">
+        <button type="button" id="tag-dropdown-btn" class="tag" style="display: inline-flex; align-items: center; gap: 4px;">
             <span>Filter by tags</span>
-            <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg style="width:12px;height:12px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
-        <div id="tag-dropdown-menu"
-             class="hidden absolute left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+        <div id="tag-dropdown-menu" class="dropdown-menu hidden">
             {{range .AllTags}}
-            <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none">
+            <label>
                 <input type="checkbox" name="tag" value="{{.Name}}"
-                       {{if index $.SelectedTags .Name}}checked{{end}}
-                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                <span class="text-sm text-gray-700">{{.Name}}</span>
+                       {{if index $.SelectedTags .Name}}checked{{end}}>
+                <span>{{.Name}}</span>
             </label>
             {{end}}
         </div>
     </div>
     {{if .SelectedTags}}
-    <span class="ml-3 inline-flex items-center gap-2 flex-wrap">
+    <span class="selected-pills">
         {{range .AllTags}}{{if index $.SelectedTags .Name}}
-        <span class="inline-flex items-center bg-blue-100 text-blue-700 text-xs pl-2 pr-1 py-0.5 rounded-full">
+        <span class="tag-pill">
             {{.Name}}
-            <a href="javascript:void(0)" onclick="removeTag('{{.Name}}')" class="ml-1 hover:text-blue-900" title="Remove">&times;</a>
+            <a href="javascript:void(0)" onclick="removeTag('{{.Name}}')" title="Remove">&times;</a>
         </span>
         {{end}}{{end}}
-        <a href="/" class="text-xs text-red-600 hover:underline">Clear all</a>
+        <a href="/" class="clear-link">Clear all</a>
     </span>
     {{end}}
 </form>
@@ -84,23 +209,17 @@ function removeTag(name) {
 {{end}}
 
 {{if .Recipes}}
-<ul class="space-y-2">
+<div class="recipe-grid">
     {{range .Recipes}}
-    <li>
-        <a href="/recipes/{{.Slug}}" class="block bg-white p-4 rounded shadow-sm hover:shadow-md transition">
-            <span class="text-lg text-blue-600 hover:underline">{{.Title}}</span>
-            {{if .Tags}}
-            <span class="ml-2">
-                {{range .Tags}}
-                <span class="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{{.Name}}</span>
-                {{end}}
-            </span>
-            {{end}}
-        </a>
-    </li>
+    <a href="/recipes/{{.Slug}}" class="recipe-card">
+        <span class="card-title">{{.Title}}</span>
+        {{if .Tags}}
+        <span class="card-tags">{{range $i, $t := .Tags}}{{if $i}} · {{end}}{{$t.Name}}{{end}}</span>
+        {{end}}
+    </a>
     {{end}}
-</ul>
+</div>
 {{else}}
-<p class="text-gray-500">No recipes yet. Create your first one!</p>
+<p class="empty-state">No recipes yet. Create your first one!</p>
 {{end}}
 {{end}}

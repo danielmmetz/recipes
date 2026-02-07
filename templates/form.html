@@ -1,96 +1,240 @@
 {{define "title"}}{{if .IsEdit}}Edit{{else}}New{{end}} Recipe{{end}}
 {{define "content"}}
-<h1 class="text-2xl font-bold text-gray-900 mb-6">{{if .IsEdit}}Edit{{else}}New{{end}} Recipe</h1>
-<form method="POST"
-      {{if .IsEdit}}hx-put="/recipes/{{.Recipe.Slug}}" hx-target="body"{{else}}action="/recipes"{{end}}
-      class="space-y-6">
+<style>
+    .form-title {
+        font-family: 'Source Serif 4', serif;
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 24px;
+    }
+    .form-group + .form-group { margin-top: 20px; }
 
-    <div>
-        <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+    /* Ingredient rows */
+    .ingredient-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .ingredient-row + .ingredient-row { margin-top: 6px; }
+    .drag-handle {
+        cursor: grab;
+        color: var(--text-muted);
+        flex-shrink: 0;
+        user-select: none;
+        font-size: 14px;
+    }
+    .drag-handle:hover { color: var(--text-secondary); }
+    .ingredient-row .form-input.qty { width: 5rem; }
+    .ingredient-row .form-input.unit-select { width: 7rem; }
+    .ingredient-row .form-input.name { flex: 1; }
+    .remove-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        border-radius: var(--radius);
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.12s;
+    }
+    .remove-btn:hover {
+        color: var(--danger);
+        border-color: var(--danger-border);
+        background: var(--danger-bg);
+    }
+    .add-link {
+        font-size: 13px;
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 0;
+        text-decoration: none;
+    }
+    .add-link:hover { text-decoration: underline; }
+    .add-link.group { color: var(--accent); }
+
+    /* Groups */
+    .ingredient-group {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        background: var(--surface);
+    }
+    .ingredient-group + .ingredient-group { margin-top: 8px; }
+    .group-header {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+        padding-right: 4px;
+    }
+    .group-drag-handle {
+        cursor: grab;
+        color: var(--text-muted);
+        flex-shrink: 0;
+        user-select: none;
+        font-size: 16px;
+    }
+    .group-drag-handle:hover { color: var(--text-secondary); }
+    .group-name-input {
+        flex: 1;
+        font-weight: 500;
+    }
+    .sortable-ingredients {
+        min-height: 2.5rem;
+        border: 1px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 8px;
+    }
+    .bg-green-50 { background: rgba(92, 107, 84, 0.06); }
+    .bg-blue-50 { background: rgba(92, 107, 84, 0.06); }
+
+    /* Tags */
+    .tag-container {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 6px 8px;
+        background: var(--surface);
+        cursor: text;
+        transition: border-color 0.12s, box-shadow 0.12s;
+    }
+    .tag-container:focus-within {
+        border-color: var(--accent-light);
+        box-shadow: 0 0 0 2px rgba(92, 107, 84, 0.12);
+    }
+    .tag-option {
+        font-family: inherit;
+        font-size: 11px;
+        padding: 2px 9px;
+        border-radius: var(--radius-full);
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        background: none;
+        cursor: pointer;
+        transition: all 0.12s;
+    }
+    .tag-option:hover {
+        border-color: var(--accent-light);
+        color: var(--text-secondary);
+    }
+    #new-tag-input {
+        font-family: inherit;
+        font-size: 12px;
+        border: none;
+        outline: none;
+        background: transparent;
+        min-width: 5rem;
+        flex: 1;
+        color: var(--text);
+        padding: 0;
+    }
+    #new-tag-input::placeholder { color: var(--text-muted); }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 24px;
+    }
+</style>
+
+<h1 class="form-title">{{if .IsEdit}}Edit{{else}}New{{end}} Recipe</h1>
+<form method="POST"
+      {{if .IsEdit}}hx-put="/recipes/{{.Recipe.Slug}}" hx-target="body"{{else}}action="/recipes"{{end}}>
+
+    <div class="form-group">
+        <label for="title" class="form-label">Title</label>
         <input type="text" name="title" id="title" required
                value="{{if .IsEdit}}{{.Recipe.Title}}{{end}}"
-               class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="form-input">
     </div>
 
-    <div>
-        <label for="source" class="block text-sm font-medium text-gray-700 mb-1">Source</label>
-        <p class="text-xs text-gray-500 mb-1">URL or attribution for the original recipe</p>
+    <div class="form-group">
+        <label for="source" class="form-label">Source</label>
+        <p class="form-hint">URL or attribution for the original recipe</p>
         <input type="url" name="source" id="source"
                value="{{if .IsEdit}}{{.Recipe.Source}}{{end}}"
                placeholder="https://..."
-               class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="form-input">
     </div>
 
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
+    <div class="form-group">
+        <label class="form-label">Ingredients</label>
 
         <!-- Ungrouped ingredients -->
-        <div id="ungrouped-ingredients" class="sortable-ingredients space-y-2{{if .UngroupedIngredients}} mb-3{{end}}">
+        <div id="ungrouped-ingredients" class="sortable-ingredients{{if .UngroupedIngredients}} mb-3{{end}}">
             {{range .UngroupedIngredients}}
             {{template "ingredient_row" .}}
             {{end}}
         </div>
-        <button type="button" onclick="addUngroupedIngredient()"
-                class="mb-3 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>
+        <button type="button" onclick="addUngroupedIngredient()" class="add-link mt-2">+ Add Ingredient</button>
 
         <!-- Groups -->
-        <div id="ingredient-groups" class="space-y-3 mb-3">
+        <div id="ingredient-groups" class="mt-3">
             {{range .Groups}}
             {{template "ingredient_group" .}}
             {{end}}
         </div>
-        <button type="button" onclick="addGroup()"
-                class="text-sm text-green-600 hover:underline">+ Add Group</button>
+        <button type="button" onclick="addGroup()" class="add-link group mt-2">+ Add Group</button>
     </div>
 
-    <div>
-        <label for="instructions" class="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+    <div class="form-group">
+        <label for="instructions" class="form-label">Instructions</label>
         <textarea name="instructions" id="instructions" rows="8" required
-                  class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">{{if .IsEdit}}{{.Recipe.Instructions}}{{end}}</textarea>
+                  class="form-input">{{if .IsEdit}}{{.Recipe.Instructions}}{{end}}</textarea>
     </div>
 
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+    <div class="form-group">
+        <label class="form-label">Tags</label>
         <input type="hidden" name="tags" id="tags-hidden"
                value="{{range $i, $t := .RecipeTags}}{{if $i}}, {{end}}{{$t.Name}}{{end}}">
 
-        <div id="tag-container" class="flex flex-wrap items-center gap-1.5 border border-gray-300 rounded px-2 py-1.5 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 cursor-text"
+        <div id="tag-container" class="tag-container"
              onclick="document.getElementById('new-tag-input').focus()">
-            <!-- Selected tags -->
             <span id="selected-tags" class="contents">
             {{range .RecipeTags}}
-            <span class="tag-pill inline-flex items-center bg-blue-100 text-blue-700 text-xs pl-2 pr-1 py-0.5 rounded-full" data-tag="{{.Name}}">
+            <span class="tag-pill" data-tag="{{.Name}}">
                 {{.Name}}
-                <button type="button" onclick="event.stopPropagation();removeTagPill(this)" class="ml-0.5 hover:text-blue-900 leading-none">&times;</button>
+                <button type="button" onclick="event.stopPropagation();removeTagPill(this)">&times;</button>
             </span>
             {{end}}
             </span>
-            <!-- Available tags -->
             <span id="available-tags" class="contents">
             {{range .AllTags}}
             <button type="button" data-tag="{{.Name}}" onclick="event.stopPropagation();toggleExistingTag(this)"
-                    class="tag-option text-xs px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors">
+                    class="tag-option">
                 {{.Name}}
             </button>
             {{end}}
             </span>
-            <!-- Inline new tag input -->
             <input type="text" id="new-tag-input" placeholder="+ New tag…"
-                   class="text-xs outline-none border-none p-0 m-0 bg-transparent min-w-[5rem] flex-1"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();addNewTag();}">
         </div>
     </div>
 
-    <div class="flex gap-3">
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
             {{if .IsEdit}}Update{{else}}Create{{end}} Recipe
         </button>
-        <a href="{{if .IsEdit}}/recipes/{{.Recipe.Slug}}{{else}}/{{end}}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">Cancel</a>
+        <a href="{{if .IsEdit}}/recipes/{{.Recipe.Slug}}{{else}}/{{end}}" class="btn">Cancel</a>
+        {{if .IsEdit}}
+        <button type="button" hx-delete="/recipes/{{.Recipe.Slug}}"
+                hx-confirm="Delete this recipe?"
+                class="btn btn-danger" style="margin-left:auto;">Delete</button>
+        {{end}}
     </div>
 </form>
 
 <script>
-// Initialize sortable on all ingredient lists
 function initSortable(el) {
     Sortable.create(el, {
         animation: 150,
@@ -115,11 +259,9 @@ function initGroupSortable() {
 }
 
 function updateAllGroupInputs() {
-    // Update ungrouped ingredients
     document.querySelectorAll('#ungrouped-ingredients .ingredient-row').forEach(function(row) {
         row.querySelector('input[name="ingredient_group[]"]').value = '';
     });
-    // Update grouped ingredients
     document.querySelectorAll('.ingredient-group').forEach(function(group) {
         var name = group.querySelector('.group-name-input').value;
         group.querySelectorAll('.ingredient-row').forEach(function(row) {
@@ -152,10 +294,10 @@ function addIngredientToGroup(btn) {
 
 function createIngredientRow(groupName) {
     var div = document.createElement('div');
-    div.className = 'flex gap-2 items-center ingredient-row';
-    div.innerHTML = '<span class="drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none" title="Drag to reorder">☰</span>' +
-        '<input type="number" name="quantity[]" step="any" placeholder="Qty" class="w-20 border border-gray-300 rounded px-2 py-1">' +
-        '<select name="unit[]" class="w-28 h-[34px] border border-gray-300 rounded px-2 py-1 bg-white">' +
+    div.className = 'ingredient-row';
+    div.innerHTML = '<span class="drag-handle" title="Drag to reorder">☰</span>' +
+        '<input type="number" name="quantity[]" step="any" placeholder="Qty" class="form-input qty">' +
+        '<select name="unit[]" class="form-input unit-select">' +
         '<option value="" selected>—</option>' +
         '<optgroup label="Volume">' +
         '<option value="tsp">tsp</option><option value="tbsp">tbsp</option><option value="fl oz">fl oz</option>' +
@@ -172,33 +314,31 @@ function createIngredientRow(groupName) {
         '<option value="stick">stick</option>' +
         '</optgroup>' +
         '</select>' +
-        '<input type="text" name="name[]" placeholder="Ingredient name" required class="flex-1 border border-gray-300 rounded px-2 py-1">' +
+        '<input type="text" name="name[]" placeholder="Ingredient name" required class="form-input name">' +
         '<input type="hidden" name="ingredient_group[]" value="' + groupName + '">' +
-        '<button type="button" onclick="this.closest(\'.ingredient-row\').remove()" ' +
-        'class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove">' +
-        '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg></button>';
+        '<button type="button" onclick="this.closest(\'.ingredient-row\').remove()" class="remove-btn" title="Remove">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" /></svg></button>';
     return div;
 }
 
 function addGroup() {
     var container = document.getElementById('ingredient-groups');
     var div = document.createElement('div');
-    div.className = 'ingredient-group border border-gray-200 rounded-lg p-3 bg-white';
-    div.innerHTML = '<div class="flex gap-2 items-center mb-2 pr-2">' +
-        '<span class="group-drag-handle cursor-grab text-gray-400 hover:text-gray-600 flex-shrink-0 select-none text-lg" title="Drag to reorder group">☰</span>' +
-        '<input type="text" placeholder="Group name (e.g. Sauce, Filling)" class="group-name-input flex-1 border border-gray-300 rounded px-2 py-1 font-medium" oninput="updateGroupIngredients(this)">' +
-        '<button type="button" onclick="removeGroup(this)" class="bg-red-500 hover:bg-red-600 text-white rounded w-7 h-7 flex items-center justify-center flex-shrink-0" title="Remove group">' +
-        '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>' +
+    div.className = 'ingredient-group';
+    div.innerHTML = '<div class="group-header">' +
+        '<span class="group-drag-handle" title="Drag to reorder group">☰</span>' +
+        '<input type="text" placeholder="Group name (e.g. Sauce, Filling)" class="group-name-input form-input" oninput="updateGroupIngredients(this)">' +
+        '<button type="button" onclick="removeGroup(this)" class="remove-btn" title="Remove group">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>' +
         '</button></div>' +
-        '<div class="sortable-ingredients space-y-2 min-h-[2.5rem] border border-dashed border-gray-200 rounded p-2"></div>' +
-        '<button type="button" onclick="addIngredientToGroup(this)" class="mt-2 text-sm text-blue-600 hover:underline">+ Add Ingredient</button>';
+        '<div class="sortable-ingredients"></div>' +
+        '<button type="button" onclick="addIngredientToGroup(this)" class="add-link mt-2">+ Add Ingredient</button>';
     container.appendChild(div);
     initSortable(div.querySelector('.sortable-ingredients'));
 }
 
 function removeGroup(btn) {
     var group = btn.closest('.ingredient-group');
-    // Move ingredients back to ungrouped
     var ungrouped = document.getElementById('ungrouped-ingredients');
     group.querySelectorAll('.ingredient-row').forEach(function(row) {
         row.querySelector('input[name="ingredient_group[]"]').value = '';
@@ -208,7 +348,6 @@ function removeGroup(btn) {
 }
 
 // --- Tag picker ---
-
 function syncTagsHidden() {
     var pills = document.querySelectorAll('#selected-tags .tag-pill');
     var names = [];
@@ -227,10 +366,10 @@ function isTagSelected(name) {
 function addTagPill(name) {
     var container = document.getElementById('selected-tags');
     var span = document.createElement('span');
-    span.className = 'tag-pill inline-flex items-center bg-blue-100 text-blue-700 text-xs pl-2 pr-1 py-0.5 rounded-full';
+    span.className = 'tag-pill';
     span.setAttribute('data-tag', name);
     span.innerHTML = name +
-        '<button type="button" onclick="event.stopPropagation();removeTagPill(this)" class="ml-0.5 hover:text-blue-900 leading-none">&times;</button>';
+        '<button type="button" onclick="event.stopPropagation();removeTagPill(this)">&times;</button>';
     container.appendChild(span);
 }
 
@@ -238,7 +377,6 @@ function removeTagPill(btn) {
     var pill = btn.closest('.tag-pill');
     var name = pill.getAttribute('data-tag');
     pill.remove();
-    // Show the available-tag button again if it exists
     var availBtn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
     if (availBtn) availBtn.classList.remove('hidden');
     syncTagsHidden();
@@ -258,18 +396,15 @@ function addNewTag() {
     if (!name) return;
     if (isTagSelected(name)) { input.value = ''; return; }
     addTagPill(name);
-    // Hide matching available-tag button if it exists
     var availBtn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
     if (availBtn) availBtn.classList.add('hidden');
     syncTagsHidden();
     input.value = '';
 }
 
-// On page load
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.sortable-ingredients').forEach(initSortable);
     initGroupSortable();
-    // Hide available-tag buttons for already-selected tags
     document.querySelectorAll('#selected-tags .tag-pill').forEach(function(pill) {
         var name = pill.getAttribute('data-tag');
         var btn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
