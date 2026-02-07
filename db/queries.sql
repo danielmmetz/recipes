@@ -4,6 +4,9 @@ SELECT * FROM recipes ORDER BY title;
 -- name: GetRecipeBySlug :one
 SELECT * FROM recipes WHERE slug = ? LIMIT 1;
 
+-- name: GetRecipeByID :one
+SELECT * FROM recipes WHERE id = ? LIMIT 1;
+
 -- name: CreateRecipe :one
 INSERT INTO recipes (slug, title, source, instructions) VALUES (?, ?, ?, ?) RETURNING *;
 

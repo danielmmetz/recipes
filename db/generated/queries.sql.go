@@ -158,6 +158,25 @@ func (q *Queries) GetOrCreateTag(ctx context.Context, name string) (Tag, error) 
 	return i, err
 }
 
+const getRecipeByID = `-- name: GetRecipeByID :one
+SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes WHERE id = ? LIMIT 1
+`
+
+func (q *Queries) GetRecipeByID(ctx context.Context, id int64) (Recipe, error) {
+	row := q.db.QueryRowContext(ctx, getRecipeByID, id)
+	var i Recipe
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Source,
+		&i.Instructions,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getRecipeBySlug = `-- name: GetRecipeBySlug :one
 SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes WHERE slug = ? LIMIT 1
 `

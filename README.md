@@ -1,12 +1,19 @@
 # Recipes
 
-Personal recipe management web app. Go backend, SQLite (via sqlc), HTMX, Tailwind CSS (CDN).
+Personal recipe management app. Go backend, SQLite (via sqlc), HTMX, Tailwind CSS (CDN).
 
-## Run
+## Usage
 
 ```
-go run . [-addr localhost] [-port 8080]
+go run . <subcommand> -h
 ```
+
+| Subcommand | Description |
+|---|---|
+| `server` | Start the web server |
+| `list-recipes` | List all recipes (id, slug, title) |
+| `get-recipe` | Display a recipe as markdown |
+| `put-recipe` | Create or update a recipe |
 
 Creates `recipes.db` in the working directory on first run. Schema is applied automatically on startup.
 

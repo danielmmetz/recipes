@@ -304,11 +304,14 @@ func (s *server) handleIngredientRow(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) saveTags(r *http.Request, recipeID int64) error {
 	if err := s.queries.DeleteRecipeTagsByRecipeID(r.Context(), recipeID); err != nil {
-		return err
+		return fmt.Errorf("deleting existing recipe tags: %w", err)
 	}
 	tagsRaw := r.FormValue("tags")
 	if tagsRaw == "" {
-		return s.queries.DeleteOrphanedTags(r.Context())
+		if err := s.queries.DeleteOrphanedTags(r.Context()); err != nil {
+			return fmt.Errorf("deleting orphaned tags: %w", err)
+		}
+		return nil
 	}
 	for _, name := range strings.Split(tagsRaw, ",") {
 		name = strings.TrimSpace(name)
@@ -317,16 +320,19 @@ func (s *server) saveTags(r *http.Request, recipeID int64) error {
 		}
 		tag, err := s.queries.GetOrCreateTag(r.Context(), name)
 		if err != nil {
-			return err
+			return fmt.Errorf("creating tag %q: %w", name, err)
 		}
 		if err := s.queries.AddRecipeTag(r.Context(), generated.AddRecipeTagParams{
 			RecipeID: recipeID,
 			TagID:    tag.ID,
 		}); err != nil {
-			return err
+			return fmt.Errorf("adding tag %q to recipe: %w", name, err)
 		}
 	}
-	return s.queries.DeleteOrphanedTags(r.Context())
+	if err := s.queries.DeleteOrphanedTags(r.Context()); err != nil {
+		return fmt.Errorf("deleting orphaned tags: %w", err)
+	}
+	return nil
 }
 
 func (s *server) createIngredients(r *http.Request, recipeID int64) error {
@@ -351,7 +357,7 @@ func (s *server) createIngredients(r *http.Request, recipeID int64) error {
 			SortOrder: int64(groupOrder),
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("creating ingredient group %q: %w", gn, err)
 		}
 		groupIDByName[gn] = sql.NullInt64{Int64: group.ID, Valid: true}
 		groupOrder++
@@ -388,7 +394,7 @@ func (s *server) createIngredients(r *http.Request, recipeID int64) error {
 			Name:      name,
 			SortOrder: int64(i),
 		}); err != nil {
-			return err
+			return fmt.Errorf("creating ingredient %q: %w", name, err)
 		}
 	}
 	return nil
