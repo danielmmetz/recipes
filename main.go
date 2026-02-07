@@ -186,10 +186,14 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 	}
 	defer db.Close()
 
+	funcMap := template.FuncMap{
+		"fmtQty": formatQuantity,
+	}
+
 	pages := map[string]*template.Template{}
 	pageFiles := []string{"index.html", "view.html", "form.html"}
 	for _, pf := range pageFiles {
-		t, err := template.New("").Option("missingkey=error").ParseFS(templateFS,
+		t, err := template.New("").Funcs(funcMap).Option("missingkey=error").ParseFS(templateFS,
 			"templates/layout.html",
 			"templates/ingredient_row.html",
 			"templates/ingredient_group.html",
@@ -200,7 +204,7 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 		}
 		pages[pf] = t
 	}
-	partial, err := template.New("").Option("missingkey=error").ParseFS(templateFS, "templates/ingredient_row.html")
+	partial, err := template.New("").Funcs(funcMap).Option("missingkey=error").ParseFS(templateFS, "templates/ingredient_row.html")
 	if err != nil {
 		return fmt.Errorf("parsing ingredient_row partial: %w", err)
 	}
@@ -330,6 +334,63 @@ func runGetRecipe(ctx context.Context, dbPath string, slug string, id int64) err
 
 	fmt.Print(b.String())
 	return nil
+}
+
+// formatQuantity renders a float64 as a human-friendly string.
+// Whole numbers are shown without decimals; common fractions (thirds, quarters,
+// sixths, eighths) are displayed as vulgar-fraction Unicode characters; all
+// other values use %g (compact, no trailing zeros).
+func formatQuantity(v float64) string {
+	// Map of fractional parts to their Unicode vulgar fraction representations.
+	type frac struct {
+		value float64
+		str   string
+	}
+	fractions := []frac{
+		{1.0 / 8, "⅛"},
+		{1.0 / 6, "⅙"},
+		{1.0 / 4, "¼"},
+		{1.0 / 3, "⅓"},
+		{3.0 / 8, "⅜"},
+		{1.0 / 2, "½"},
+		{5.0 / 8, "⅝"},
+		{2.0 / 3, "⅔"},
+		{3.0 / 4, "¾"},
+		{5.0 / 6, "⅚"},
+		{7.0 / 8, "⅞"},
+	}
+	const tol = 0.001
+
+	whole := int64(v)
+	fpart := v - float64(whole)
+
+	// Pure whole number
+	if fpart < tol {
+		return fmt.Sprintf("%d", whole)
+	}
+	// Check if the fractional part is close to 1 (rounds up)
+	if 1-fpart < tol {
+		return fmt.Sprintf("%d", whole+1)
+	}
+
+	for _, f := range fractions {
+		if abs(fpart-f.value) < tol {
+			if whole == 0 {
+				return f.str
+			}
+			return fmt.Sprintf("%d%s", whole, f.str)
+		}
+	}
+
+	// Fallback: use %g for a compact representation
+	return fmt.Sprintf("%g", v)
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func formatIngredient(ing generated.Ingredient) string {
@@ -495,5 +556,23 @@ func parseIngredientString(s string) (sql.NullFloat64, sql.NullString, string) {
 }
 
 func parseFloat(s string) (float64, error) {
-	return strconv.ParseFloat(s, 64)
+	// Try plain decimal first
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f, nil
+	}
+
+	// Try fraction like "1/2"
+	if num, denom, ok := strings.Cut(s, "/"); ok {
+		n, err := strconv.ParseFloat(num, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid numerator %q: %w", num, err)
+		}
+		d, err := strconv.ParseFloat(denom, 64)
+		if err != nil || d == 0 {
+			return 0, fmt.Errorf("invalid denominator %q", denom)
+		}
+		return n / d, nil
+	}
+
+	return 0, fmt.Errorf("cannot parse %q as a number", s)
 }
