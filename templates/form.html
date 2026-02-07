@@ -190,7 +190,8 @@
     <div class="form-group">
         <label for="instructions" class="form-label">Instructions</label>
         <textarea name="instructions" id="instructions" rows="8" required
-                  class="form-input">{{if .IsEdit}}{{.Recipe.Instructions}}{{end}}</textarea>
+                  class="form-input" style="overflow:hidden; resize:vertical;"
+                  oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'">{{if .IsEdit}}{{.Recipe.Instructions}}{{end}}</textarea>
     </div>
 
     <div class="form-group">
@@ -405,6 +406,9 @@ function addNewTag() {
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.sortable-ingredients').forEach(initSortable);
     initGroupSortable();
+    var ta = document.getElementById('instructions');
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
     document.querySelectorAll('#selected-tags .tag-pill').forEach(function(pill) {
         var name = pill.getAttribute('data-tag');
         var btn = document.querySelector('#available-tags button[data-tag="' + CSS.escape(name) + '"]');
