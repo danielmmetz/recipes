@@ -36,6 +36,16 @@ When auth is enabled:
 - Non-admin users have read-only access to public recipes.
 - CLI commands bypass auth and see everything.
 
+## Screenshots
+
+| Public recipe list | Admin recipe list |
+|---|---|
+| ![Public recipe list](screenshots/recipes-list-public.png) | ![Admin recipe list](screenshots/recipes-list-admin.png) |
+
+| Recipe detail | Recipe editing |
+|---|---|
+| ![Recipe detail](screenshots/recipes-detail.png) | ![Recipe editing](screenshots/recipes-edit.png) |
+
 ## Development
 
 - **SQL changes:** Edit `db/schema.sql` and `db/queries.sql`, then run `go run github.com/sqlc-dev/sqlc/cmd/sqlc generate`. Generated code lands in `db/generated/`.
