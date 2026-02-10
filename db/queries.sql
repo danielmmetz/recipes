@@ -1,6 +1,9 @@
 -- name: ListRecipes :many
 SELECT * FROM recipes ORDER BY title;
 
+-- name: ListPublicRecipes :many
+SELECT * FROM recipes WHERE private = 0 ORDER BY title;
+
 -- name: GetRecipeBySlug :one
 SELECT * FROM recipes WHERE slug = ? LIMIT 1;
 
@@ -8,10 +11,10 @@ SELECT * FROM recipes WHERE slug = ? LIMIT 1;
 SELECT * FROM recipes WHERE id = ? LIMIT 1;
 
 -- name: CreateRecipe :one
-INSERT INTO recipes (slug, title, source, instructions) VALUES (?, ?, ?, ?) RETURNING *;
+INSERT INTO recipes (slug, title, source, instructions, private) VALUES (?, ?, ?, ?, ?) RETURNING *;
 
 -- name: UpdateRecipe :exec
-UPDATE recipes SET title = ?, slug = ?, source = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?;
+UPDATE recipes SET title = ?, slug = ?, source = ?, instructions = ?, private = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?;
 
 -- name: DeleteRecipe :exec
 DELETE FROM recipes WHERE slug = ?;

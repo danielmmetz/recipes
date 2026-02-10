@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/danielmmetz/recipes/db/generated"
+	"github.com/peterbourgon/ff/v3"
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"golang.org/x/sync/errgroup"
 
@@ -55,23 +56,42 @@ func mainE(ctx context.Context, args []string) error {
 
 func serverCommand() *ffcli.Command {
 	var (
-		fs   = flag.NewFlagSet("server", flag.ExitOnError)
-		db   string
-		addr string
-		port int
+		fs             = flag.NewFlagSet("server", flag.ExitOnError)
+		db             string
+		addr           string
+		port           int
+		oidcClientID   string
+		oidcClientSecret string
+		oidcIssuerURL  string
+		baseURL        string
 	)
 	fs.StringVar(&db, "db", "recipes.db", "path to SQLite database")
 	fs.StringVar(&addr, "addr", "localhost", "address to listen on")
 	fs.IntVar(&port, "port", 8080, "port to listen on")
+	fs.StringVar(&oidcClientID, "oidc-client-id", "", "OIDC client ID")
+	fs.StringVar(&oidcClientSecret, "oidc-client-secret", "", "OIDC client secret")
+	fs.StringVar(&oidcIssuerURL, "oidc-issuer-url", "https://idp.example.com", "OIDC issuer URL")
+	fs.StringVar(&baseURL, "base-url", "http://localhost:8080", "Base URL for this app (used for OIDC redirect URI and cookie settings)")
 
 	return &ffcli.Command{
 		Name:       "server",
 		ShortUsage: "recipes server [flags]",
 		ShortHelp:  "Start the web server.",
 		FlagSet:    fs,
+		Options:    []ff.Option{ff.WithEnvVars()},
 		Exec: func(ctx context.Context, args []string) error {
 			logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-			return runServer(ctx, logger, db, fmt.Sprintf("%s:%d", addr, port))
+			authCfg := authConfig{
+				ClientID:     oidcClientID,
+				ClientSecret: oidcClientSecret,
+				IssuerURL:    oidcIssuerURL,
+				BaseURL:      baseURL,
+				SecureCookie: strings.HasPrefix(baseURL, "https://"),
+			}
+			if !authCfg.enabled() {
+				logger.Info("OIDC not configured, auth disabled (set OIDC_CLIENT_ID and OIDC_CLIENT_SECRET to enable)")
+			}
+			return runServer(ctx, logger, db, fmt.Sprintf("%s:%d", addr, port), authCfg)
 		},
 	}
 }
@@ -126,6 +146,7 @@ func putRecipeCommand() *ffcli.Command {
 		title        string
 		instructions string
 		source       string
+		private      bool
 		ingredients  repeatedFlag
 		tags         repeatedFlag
 	)
@@ -133,6 +154,7 @@ func putRecipeCommand() *ffcli.Command {
 	fs.StringVar(&title, "title", "", "recipe title (required)")
 	fs.StringVar(&instructions, "instructions", "", "recipe instructions (markdown)")
 	fs.StringVar(&source, "source", "", "recipe source URL or description")
+	fs.BoolVar(&private, "private", false, "mark recipe as private (visible only to admins)")
 	fs.Var(&ingredients, "ingredient", `ingredient in "qty unit name" or "name" format, e.g. "2 cup flour" (repeatable)`)
 	fs.Var(&tags, "tag", "tag name (repeatable)")
 
@@ -145,7 +167,7 @@ func putRecipeCommand() *ffcli.Command {
 			if title == "" {
 				return fmt.Errorf("-title is required")
 			}
-			return runPutRecipe(ctx, db, title, source, instructions, ingredients, tags)
+			return runPutRecipe(ctx, db, title, source, instructions, private, ingredients, tags)
 		},
 	}
 }
@@ -175,11 +197,12 @@ func openDB(ctx context.Context, dbPath string) (*sql.DB, *generated.Queries, er
 	// Migrations
 	_, _ = db.ExecContext(ctx, `ALTER TABLE ingredients ADD COLUMN group_id INTEGER REFERENCES ingredient_groups(id) ON DELETE CASCADE`)
 	_, _ = db.ExecContext(ctx, `ALTER TABLE recipes ADD COLUMN source TEXT NOT NULL DEFAULT ''`)
+	_, _ = db.ExecContext(ctx, `ALTER TABLE recipes ADD COLUMN private INTEGER NOT NULL DEFAULT 0`)
 
 	return db, generated.New(db), nil
 }
 
-func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAddr string) error {
+func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAddr string, authCfg authConfig) error {
 	db, queries, err := openDB(ctx, dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -209,19 +232,31 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 		return fmt.Errorf("parsing ingredient_row partial: %w", err)
 	}
 
-	srv := &server{queries: queries, db: db, pages: pages, partial: partial}
+	srv := &server{
+		queries:     queries,
+		db:          db,
+		pages:       pages,
+		partial:     partial,
+		auth:        authCfg,
+		sessions:    newSessionStore(),
+		authPending: newAuthState(),
+		logger:      logger,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", srv.handleIndex)
-	mux.HandleFunc("GET /recipes/new", srv.handleNewRecipe)
-	mux.HandleFunc("POST /recipes", srv.handleCreateRecipe)
+	mux.HandleFunc("GET /recipes/new", srv.requiresAdmin(srv.handleNewRecipe))
+	mux.HandleFunc("POST /recipes", srv.requiresAdmin(srv.handleCreateRecipe))
 	mux.HandleFunc("GET /recipes/{slug}", srv.handleViewRecipe)
-	mux.HandleFunc("GET /recipes/{slug}/edit", srv.handleEditRecipe)
-	mux.HandleFunc("PUT /recipes/{slug}", srv.handleUpdateRecipe)
-	mux.HandleFunc("DELETE /recipes/{slug}", srv.handleDeleteRecipe)
+	mux.HandleFunc("GET /recipes/{slug}/edit", srv.requiresAdmin(srv.handleEditRecipe))
+	mux.HandleFunc("PUT /recipes/{slug}", srv.requiresAdmin(srv.handleUpdateRecipe))
+	mux.HandleFunc("DELETE /recipes/{slug}", srv.requiresAdmin(srv.handleDeleteRecipe))
 	mux.HandleFunc("GET /ingredients/row", srv.handleIngredientRow)
+	mux.HandleFunc("GET /auth/login", srv.handleLogin)
+	mux.HandleFunc("GET /auth/callback", srv.handleCallback)
+	mux.HandleFunc("POST /auth/logout", srv.handleLogout)
 
-	s := http.Server{Addr: listenAddr, Handler: mux}
+	s := http.Server{Addr: listenAddr, Handler: srv.authMiddleware(mux)}
 	var eg errgroup.Group
 	eg.Go(func() error {
 		<-ctx.Done()
@@ -410,7 +445,7 @@ func formatIngredient(ing generated.Ingredient) string {
 	return strings.Join(parts, " ")
 }
 
-func runPutRecipe(ctx context.Context, dbPath string, title, source, instructions string, ingredients, tags []string) error {
+func runPutRecipe(ctx context.Context, dbPath string, title, source, instructions string, private bool, ingredients, tags []string) error {
 	db, queries, err := openDB(ctx, dbPath)
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
@@ -423,11 +458,16 @@ func runPutRecipe(ctx context.Context, dbPath string, title, source, instruction
 	existing, err := queries.GetRecipeBySlug(ctx, slug)
 	if err != nil {
 		// Create
+		var privateInt int64
+		if private {
+			privateInt = 1
+		}
 		recipe, err := queries.CreateRecipe(ctx, generated.CreateRecipeParams{
 			Slug:         slug,
 			Title:        title,
 			Source:       source,
 			Instructions: instructions,
+			Private:      privateInt,
 		})
 		if err != nil {
 			return fmt.Errorf("creating recipe: %w", err)
@@ -443,11 +483,16 @@ func runPutRecipe(ctx context.Context, dbPath string, title, source, instruction
 	}
 
 	// Update
+	var privateInt int64
+	if private {
+		privateInt = 1
+	}
 	if err := queries.UpdateRecipe(ctx, generated.UpdateRecipeParams{
 		Title:        title,
 		Slug:         slug,
 		Source:       source,
 		Instructions: instructions,
+		Private:      privateInt,
 		Slug_2:       slug,
 	}); err != nil {
 		return fmt.Errorf("updating recipe: %w", err)

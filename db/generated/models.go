@@ -33,6 +33,7 @@ type Recipe struct {
 	Instructions string
 	CreatedAt    sql.NullTime
 	UpdatedAt    sql.NullTime
+	Private      int64
 }
 
 type RecipeTag struct {

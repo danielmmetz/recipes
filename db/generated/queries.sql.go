@@ -72,7 +72,7 @@ func (q *Queries) CreateIngredientGroup(ctx context.Context, arg CreateIngredien
 }
 
 const createRecipe = `-- name: CreateRecipe :one
-INSERT INTO recipes (slug, title, source, instructions) VALUES (?, ?, ?, ?) RETURNING id, slug, title, source, instructions, created_at, updated_at
+INSERT INTO recipes (slug, title, source, instructions, private) VALUES (?, ?, ?, ?, ?) RETURNING id, slug, title, source, instructions, created_at, updated_at, private
 `
 
 type CreateRecipeParams struct {
@@ -80,6 +80,7 @@ type CreateRecipeParams struct {
 	Title        string
 	Source       string
 	Instructions string
+	Private      int64
 }
 
 func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Recipe, error) {
@@ -88,6 +89,7 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Rec
 		arg.Title,
 		arg.Source,
 		arg.Instructions,
+		arg.Private,
 	)
 	var i Recipe
 	err := row.Scan(
@@ -98,6 +100,7 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Rec
 		&i.Instructions,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Private,
 	)
 	return i, err
 }
@@ -159,7 +162,7 @@ func (q *Queries) GetOrCreateTag(ctx context.Context, name string) (Tag, error) 
 }
 
 const getRecipeByID = `-- name: GetRecipeByID :one
-SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes WHERE id = ? LIMIT 1
+SELECT id, slug, title, source, instructions, created_at, updated_at, private FROM recipes WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetRecipeByID(ctx context.Context, id int64) (Recipe, error) {
@@ -173,12 +176,13 @@ func (q *Queries) GetRecipeByID(ctx context.Context, id int64) (Recipe, error) {
 		&i.Instructions,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Private,
 	)
 	return i, err
 }
 
 const getRecipeBySlug = `-- name: GetRecipeBySlug :one
-SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes WHERE slug = ? LIMIT 1
+SELECT id, slug, title, source, instructions, created_at, updated_at, private FROM recipes WHERE slug = ? LIMIT 1
 `
 
 func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, error) {
@@ -192,6 +196,7 @@ func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, err
 		&i.Instructions,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Private,
 	)
 	return i, err
 }
@@ -290,8 +295,44 @@ func (q *Queries) ListIngredientsByRecipeID(ctx context.Context, recipeID int64)
 	return items, nil
 }
 
+const listPublicRecipes = `-- name: ListPublicRecipes :many
+SELECT id, slug, title, source, instructions, created_at, updated_at, private FROM recipes WHERE private = 0 ORDER BY title
+`
+
+func (q *Queries) ListPublicRecipes(ctx context.Context) ([]Recipe, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicRecipes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Recipe
+	for rows.Next() {
+		var i Recipe
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Source,
+			&i.Instructions,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Private,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecipes = `-- name: ListRecipes :many
-SELECT id, slug, title, source, instructions, created_at, updated_at FROM recipes ORDER BY title
+SELECT id, slug, title, source, instructions, created_at, updated_at, private FROM recipes ORDER BY title
 `
 
 func (q *Queries) ListRecipes(ctx context.Context) ([]Recipe, error) {
@@ -311,6 +352,7 @@ func (q *Queries) ListRecipes(ctx context.Context) ([]Recipe, error) {
 			&i.Instructions,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Private,
 		); err != nil {
 			return nil, err
 		}
@@ -356,7 +398,7 @@ func (q *Queries) ListTagsByRecipeID(ctx context.Context, recipeID int64) ([]Tag
 }
 
 const updateRecipe = `-- name: UpdateRecipe :exec
-UPDATE recipes SET title = ?, slug = ?, source = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?
+UPDATE recipes SET title = ?, slug = ?, source = ?, instructions = ?, private = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?
 `
 
 type UpdateRecipeParams struct {
@@ -364,6 +406,7 @@ type UpdateRecipeParams struct {
 	Slug         string
 	Source       string
 	Instructions string
+	Private      int64
 	Slug_2       string
 }
 
@@ -373,6 +416,7 @@ func (q *Queries) UpdateRecipe(ctx context.Context, arg UpdateRecipeParams) erro
 		arg.Slug,
 		arg.Source,
 		arg.Instructions,
+		arg.Private,
 		arg.Slug_2,
 	)
 	return err

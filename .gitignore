@@ -20,5 +20,9 @@ go.work
 *.swo
 *~
 
+# Environment (contains secrets)
+.env
+
 # Claude Code
 .claude/
+.pi/

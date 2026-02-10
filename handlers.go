@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,10 +15,14 @@ import (
 )
 
 type server struct {
-	queries *generated.Queries
-	db      *sql.DB
-	pages   map[string]*template.Template
-	partial *template.Template
+	queries     *generated.Queries
+	db          *sql.DB
+	pages       map[string]*template.Template
+	partial     *template.Template
+	auth        authConfig
+	sessions    *sessionStore
+	authPending *authState
+	logger      *slog.Logger
 }
 
 // templateIngredient extends the generated Ingredient with a GroupName and UnitGroups for template rendering.
@@ -48,7 +53,13 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	selectedTagNames := r.URL.Query()["tag"]
 
-	recipes, err := s.queries.ListRecipes(r.Context())
+	ai := authInfoFromContext(r.Context())
+	var recipes []generated.Recipe
+	if ai.IsAdmin {
+		recipes, err = s.queries.ListRecipes(r.Context())
+	} else {
+		recipes, err = s.queries.ListPublicRecipes(r.Context())
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -89,7 +100,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		indexRecipes = append(indexRecipes, indexRecipe{Recipe: recipe, Tags: tags})
 	}
 
-	s.render(w, "index.html", map[string]any{
+	s.render(w, r, "index.html", map[string]any{
 		"Recipes":      indexRecipes,
 		"AllTags":       allTags,
 		"SelectedTags":  selectedSet,
@@ -102,7 +113,7 @@ func (s *server) handleNewRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "form.html", map[string]any{
+	s.render(w, r, "form.html", map[string]any{
 		"IsEdit":                false,
 		"UngroupedIngredients": []templateIngredient{{UnitGroups: StandardUnitGroups}},
 		"Groups":               []ingredientGroupData{},
@@ -122,11 +133,17 @@ func (s *server) handleCreateRecipe(w http.ResponseWriter, r *http.Request) {
 	instructions := r.FormValue("instructions")
 	slug := slugify(title)
 
+	var private int64
+	if r.FormValue("private") == "on" {
+		private = 1
+	}
+
 	recipe, err := s.queries.CreateRecipe(r.Context(), generated.CreateRecipeParams{
 		Slug:         slug,
 		Title:        title,
 		Source:       source,
 		Instructions: instructions,
+		Private:      private,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -148,6 +165,10 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	recipe, err := s.queries.GetRecipeBySlug(r.Context(), slug)
 	if err != nil {
+		http.Error(w, "Recipe not found", http.StatusNotFound)
+		return
+	}
+	if recipe.Private != 0 && !authInfoFromContext(r.Context()).IsAdmin {
 		http.Error(w, "Recipe not found", http.StatusNotFound)
 		return
 	}
@@ -175,7 +196,7 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "view.html", map[string]any{
+	s.render(w, r, "view.html", map[string]any{
 		"Recipe":                recipe,
 		"UngroupedIngredients": ungrouped,
 		"Groups":               groupedData,
@@ -221,7 +242,7 @@ func (s *server) handleEditRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, "form.html", map[string]any{
+	s.render(w, r, "form.html", map[string]any{
 		"IsEdit":                true,
 		"Recipe":                recipe,
 		"UngroupedIngredients": ungrouped,
@@ -249,11 +270,17 @@ func (s *server) handleUpdateRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var private int64
+	if r.FormValue("private") == "on" {
+		private = 1
+	}
+
 	err = s.queries.UpdateRecipe(r.Context(), generated.UpdateRecipeParams{
 		Title:        title,
 		Slug:         newSlug,
 		Source:       source,
 		Instructions: instructions,
+		Private:      private,
 		Slug_2:       oldSlug,
 	})
 	if err != nil {
@@ -430,12 +457,14 @@ func buildGroupedView(ingredients []generated.Ingredient, groups []generated.Ing
 	return ungrouped, groupedData
 }
 
-func (s *server) render(w http.ResponseWriter, name string, data any) {
+func (s *server) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
 	t, ok := s.pages[name]
 	if !ok {
 		http.Error(w, "template not found: "+name, http.StatusInternalServerError)
 		return
 	}
+	data["Auth"] = authInfoFromContext(r.Context())
+	data["AuthEnabled"] = s.auth.enabled()
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

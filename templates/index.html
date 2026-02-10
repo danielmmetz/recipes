@@ -80,6 +80,16 @@
         font-size: 11px;
         color: var(--text-muted);
     }
+    .private-badge {
+        font-size: 10px;
+        font-weight: 500;
+        background: var(--border);
+        color: var(--text-muted);
+        padding: 1px 7px;
+        border-radius: var(--radius-full);
+        vertical-align: middle;
+        margin-left: 4px;
+    }
     .empty-state {
         color: var(--text-muted);
         font-size: 14px;
@@ -212,7 +222,7 @@ function removeTag(name) {
 <div class="recipe-grid">
     {{range .Recipes}}
     <a href="/recipes/{{.Slug}}" class="recipe-card">
-        <span class="card-title">{{.Title}}</span>
+        <span class="card-title">{{.Title}}{{if .Private}} <span class="private-badge">Private</span>{{end}}</span>
         {{if .Tags}}
         <span class="card-tags">{{range $i, $t := .Tags}}{{if $i}} · {{end}}{{$t.Name}}{{end}}</span>
         {{end}}
