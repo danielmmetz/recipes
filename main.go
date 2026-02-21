@@ -251,6 +251,7 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 	mux.HandleFunc("GET /recipes/{slug}/edit", srv.requiresAdmin(srv.handleEditRecipe))
 	mux.HandleFunc("PUT /recipes/{slug}", srv.requiresAdmin(srv.handleUpdateRecipe))
 	mux.HandleFunc("DELETE /recipes/{slug}", srv.requiresAdmin(srv.handleDeleteRecipe))
+	mux.HandleFunc("POST /recipes/{slug}/share", srv.requiresAdmin(srv.handleShareRecipe))
 	mux.HandleFunc("GET /ingredients/row", srv.handleIngredientRow)
 	mux.HandleFunc("GET /auth/login", srv.handleLogin)
 	mux.HandleFunc("GET /auth/callback", srv.handleCallback)

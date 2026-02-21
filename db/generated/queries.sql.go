@@ -105,6 +105,27 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Rec
 	return i, err
 }
 
+const createShareLink = `-- name: CreateShareLink :one
+INSERT INTO share_links (recipe_id, token) VALUES (?, ?) RETURNING id, recipe_id, token, created_at
+`
+
+type CreateShareLinkParams struct {
+	RecipeID int64
+	Token    string
+}
+
+func (q *Queries) CreateShareLink(ctx context.Context, arg CreateShareLinkParams) (ShareLink, error) {
+	row := q.db.QueryRowContext(ctx, createShareLink, arg.RecipeID, arg.Token)
+	var i ShareLink
+	err := row.Scan(
+		&i.ID,
+		&i.RecipeID,
+		&i.Token,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteIngredientGroupsByRecipeID = `-- name: DeleteIngredientGroupsByRecipeID :exec
 DELETE FROM ingredient_groups WHERE recipe_id = ?
 `
@@ -197,6 +218,22 @@ func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, err
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Private,
+	)
+	return i, err
+}
+
+const getShareLinkByRecipeID = `-- name: GetShareLinkByRecipeID :one
+SELECT id, recipe_id, token, created_at FROM share_links WHERE recipe_id = ? LIMIT 1
+`
+
+func (q *Queries) GetShareLinkByRecipeID(ctx context.Context, recipeID int64) (ShareLink, error) {
+	row := q.db.QueryRowContext(ctx, getShareLinkByRecipeID, recipeID)
+	var i ShareLink
+	err := row.Scan(
+		&i.ID,
+		&i.RecipeID,
+		&i.Token,
+		&i.CreatedAt,
 	)
 	return i, err
 }

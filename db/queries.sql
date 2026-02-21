@@ -57,3 +57,11 @@ SELECT t.id, t.name FROM tags t
 JOIN recipe_tags rt ON rt.tag_id = t.id
 WHERE rt.recipe_id = ?
 ORDER BY t.name;
+
+-- name: GetShareLinkByRecipeID :one
+SELECT id, recipe_id, token, created_at FROM share_links WHERE recipe_id = ? LIMIT 1;
+
+-- name: CreateShareLink :one
+INSERT INTO share_links (recipe_id, token) VALUES (?, ?) RETURNING id, recipe_id, token, created_at;
+
+

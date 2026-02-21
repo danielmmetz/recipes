@@ -34,7 +34,12 @@ When auth is enabled:
 - Users in the `recipes_admin` group can create, edit, and delete recipes.
 - Recipes can be marked **private** (visible only to admins).
 - Non-admin users have read-only access to public recipes.
+- Admins can generate **share links** for private recipes, allowing anyone with the link to view that specific recipe without logging in.
 - CLI commands bypass auth and see everything.
+
+### Share Links
+
+Admins can click the **Share** button on any private recipe to generate a shareable URL containing a short token (e.g. `?key=Ab3x_9Lk`). The link is copied to the clipboard. Tokens are 8-character base64url strings (48 bits of entropy). Each recipe has at most one share link; clicking Share again returns the same URL. Share links are deleted automatically when their recipe is deleted.
 
 ## Screenshots
 

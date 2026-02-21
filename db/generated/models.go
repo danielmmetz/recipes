@@ -41,6 +41,13 @@ type RecipeTag struct {
 	TagID    int64
 }
 
+type ShareLink struct {
+	ID        int64
+	RecipeID  int64
+	Token     string
+	CreatedAt sql.NullTime
+}
+
 type Tag struct {
 	ID   int64
 	Name string

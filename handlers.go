@@ -2,11 +2,16 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -161,6 +166,49 @@ func (s *server) handleCreateRecipe(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/recipes/"+recipe.Slug, http.StatusSeeOther)
 }
 
+func (s *server) handleShareRecipe(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	recipe, err := s.queries.GetRecipeBySlug(r.Context(), slug)
+	if err != nil {
+		http.Error(w, "Recipe not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if a share link already exists
+	existing, err := s.queries.GetShareLinkByRecipeID(r.Context(), recipe.ID)
+	if err == nil {
+		// Already exists, return it
+		shareURL := fmt.Sprintf("%s/recipes/%s?key=%s", strings.TrimRight(s.auth.BaseURL, "/"), recipe.Slug, url.QueryEscape(existing.Token))
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]string{"url": shareURL}); err != nil {
+			slog.Error("failed to encode share link response", "error", err)
+		}
+		return
+	}
+
+	// Generate a new token: 6 bytes = 48 bits of entropy, base64url-encoded (8 chars)
+	tokenBytes := make([]byte, 6)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
+
+	if _, err := s.queries.CreateShareLink(r.Context(), generated.CreateShareLinkParams{
+		RecipeID: recipe.ID,
+		Token:    token,
+	}); err != nil {
+		http.Error(w, "failed to create share link", http.StatusInternalServerError)
+		return
+	}
+
+	shareURL := fmt.Sprintf("%s/recipes/%s?key=%s", strings.TrimRight(s.auth.BaseURL, "/"), recipe.Slug, url.QueryEscape(token))
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": shareURL}); err != nil {
+		slog.Error("failed to encode share link response", "error", err)
+	}
+}
+
 func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	recipe, err := s.queries.GetRecipeBySlug(r.Context(), slug)
@@ -168,9 +216,22 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Recipe not found", http.StatusNotFound)
 		return
 	}
+
+	// Check access: public recipes are visible to all, private recipes require admin or valid share key
+	hasShareAccess := false
 	if recipe.Private != 0 && !authInfoFromContext(r.Context()).IsAdmin {
-		http.Error(w, "Recipe not found", http.StatusNotFound)
-		return
+		// Check for share key using constant-time comparison
+		key := r.URL.Query().Get("key")
+		if key != "" {
+			shareLink, err := s.queries.GetShareLinkByRecipeID(r.Context(), recipe.ID)
+			if err == nil && subtle.ConstantTimeCompare([]byte(key), []byte(shareLink.Token)) == 1 {
+				hasShareAccess = true
+			}
+		}
+		if !hasShareAccess {
+			http.Error(w, "Recipe not found", http.StatusNotFound)
+			return
+		}
 	}
 	ingredients, err := s.queries.ListIngredientsByRecipeID(r.Context(), recipe.ID)
 	if err != nil {
