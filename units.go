@@ -15,6 +15,15 @@ type Unit struct {
 // StandardUnitGroups defines the allowed ingredient units, grouped by category.
 var StandardUnitGroups = []UnitGroup{
 	{
+		Label: "Weight",
+		Units: []Unit{
+			{Value: "oz", Label: "oz"},
+			{Value: "lb", Label: "lb"},
+			{Value: "g", Label: "g"},
+			{Value: "kg", Label: "kg"},
+		},
+	},
+	{
 		Label: "Volume",
 		Units: []Unit{
 			{Value: "tsp", Label: "tsp"},
@@ -26,15 +35,6 @@ var StandardUnitGroups = []UnitGroup{
 			{Value: "gal", Label: "gal"},
 			{Value: "mL", Label: "mL"},
 			{Value: "L", Label: "L"},
-		},
-	},
-	{
-		Label: "Weight",
-		Units: []Unit{
-			{Value: "oz", Label: "oz"},
-			{Value: "lb", Label: "lb"},
-			{Value: "g", Label: "g"},
-			{Value: "kg", Label: "kg"},
 		},
 	},
 	{
