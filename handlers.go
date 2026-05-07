@@ -60,7 +60,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	ai := authInfoFromContext(r.Context())
 	var recipes []generated.Recipe
-	if ai.IsAdmin {
+	if ai.IsLoggedIn {
 		recipes, err = s.queries.ListRecipes(r.Context())
 	} else {
 		recipes, err = s.queries.ListPublicRecipes(r.Context())
@@ -217,12 +217,10 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check access: public recipes are visible to all, private recipes require admin or valid share key
-	hasShareAccess := false
-	if recipe.Private != 0 && !authInfoFromContext(r.Context()).IsAdmin {
-		// Check for share key using constant-time comparison
-		key := r.URL.Query().Get("key")
-		if key != "" {
+	// Private recipes are visible to logged-in users, or to anyone with a valid share key.
+	if recipe.Private != 0 && !authInfoFromContext(r.Context()).IsLoggedIn {
+		hasShareAccess := false
+		if key := r.URL.Query().Get("key"); key != "" {
 			shareLink, err := s.queries.GetShareLinkByRecipeID(r.Context(), recipe.ID)
 			if err == nil && subtle.ConstantTimeCompare([]byte(key), []byte(shareLink.Token)) == 1 {
 				hasShareAccess = true
@@ -257,6 +255,11 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	logsSection, err := s.buildLogsSection(r, recipe)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	s.render(w, r, "view.html", map[string]any{
 		"Recipe":                recipe,
 		"UngroupedIngredients": ungrouped,
@@ -264,6 +267,7 @@ func (s *server) handleViewRecipe(w http.ResponseWriter, r *http.Request) {
 		"HasIngredients":       len(ingredients) > 0,
 		"InstructionsHTML":     template.HTML(mdBuf.String()),
 		"Tags":                 tags,
+		"LogsSection":          logsSection,
 	})
 }
 

@@ -105,6 +105,29 @@ func (q *Queries) CreateRecipe(ctx context.Context, arg CreateRecipeParams) (Rec
 	return i, err
 }
 
+const createRecipeLog = `-- name: CreateRecipeLog :one
+INSERT INTO recipe_logs (user_id, recipe_id, cooked_on) VALUES (?, ?, ?) RETURNING id, user_id, recipe_id, cooked_on, created_at
+`
+
+type CreateRecipeLogParams struct {
+	UserID   int64
+	RecipeID int64
+	CookedOn string
+}
+
+func (q *Queries) CreateRecipeLog(ctx context.Context, arg CreateRecipeLogParams) (RecipeLog, error) {
+	row := q.db.QueryRowContext(ctx, createRecipeLog, arg.UserID, arg.RecipeID, arg.CookedOn)
+	var i RecipeLog
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RecipeID,
+		&i.CookedOn,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createShareLink = `-- name: CreateShareLink :one
 INSERT INTO share_links (recipe_id, token) VALUES (?, ?) RETURNING id, recipe_id, token, created_at
 `
@@ -159,6 +182,15 @@ DELETE FROM recipes WHERE slug = ?
 
 func (q *Queries) DeleteRecipe(ctx context.Context, slug string) error {
 	_, err := q.db.ExecContext(ctx, deleteRecipe, slug)
+	return err
+}
+
+const deleteRecipeLog = `-- name: DeleteRecipeLog :exec
+DELETE FROM recipe_logs WHERE id = ?
+`
+
+func (q *Queries) DeleteRecipeLog(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRecipeLog, id)
 	return err
 }
 
@@ -218,6 +250,23 @@ func (q *Queries) GetRecipeBySlug(ctx context.Context, slug string) (Recipe, err
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Private,
+	)
+	return i, err
+}
+
+const getRecipeLog = `-- name: GetRecipeLog :one
+SELECT id, user_id, recipe_id, cooked_on, created_at FROM recipe_logs WHERE id = ? LIMIT 1
+`
+
+func (q *Queries) GetRecipeLog(ctx context.Context, id int64) (RecipeLog, error) {
+	row := q.db.QueryRowContext(ctx, getRecipeLog, id)
+	var i RecipeLog
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RecipeID,
+		&i.CookedOn,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -368,6 +417,139 @@ func (q *Queries) ListPublicRecipes(ctx context.Context) ([]Recipe, error) {
 	return items, nil
 }
 
+const listRecentRecipeLogs = `-- name: ListRecentRecipeLogs :many
+SELECT id, user_id, recipe_id, cooked_on, created_at
+FROM recipe_logs
+WHERE cooked_on >= ?
+ORDER BY cooked_on DESC
+`
+
+func (q *Queries) ListRecentRecipeLogs(ctx context.Context, cookedOn string) ([]RecipeLog, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentRecipeLogs, cookedOn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RecipeLog
+	for rows.Next() {
+		var i RecipeLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.RecipeID,
+			&i.CookedOn,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecipeLogsByRecipeID = `-- name: ListRecipeLogsByRecipeID :many
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at, u.username
+FROM recipe_logs l
+JOIN users u ON u.id = l.user_id
+WHERE l.recipe_id = ?
+ORDER BY l.cooked_on DESC, l.created_at DESC
+`
+
+type ListRecipeLogsByRecipeIDRow struct {
+	ID        int64
+	UserID    int64
+	RecipeID  int64
+	CookedOn  string
+	CreatedAt sql.NullTime
+	Username  string
+}
+
+func (q *Queries) ListRecipeLogsByRecipeID(ctx context.Context, recipeID int64) ([]ListRecipeLogsByRecipeIDRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecipeLogsByRecipeID, recipeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecipeLogsByRecipeIDRow
+	for rows.Next() {
+		var i ListRecipeLogsByRecipeIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.RecipeID,
+			&i.CookedOn,
+			&i.CreatedAt,
+			&i.Username,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecipeLogsByUserID = `-- name: ListRecipeLogsByUserID :many
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at,
+       r.slug AS recipe_slug, r.title AS recipe_title
+FROM recipe_logs l
+JOIN recipes r ON r.id = l.recipe_id
+WHERE l.user_id = ?
+ORDER BY l.cooked_on DESC, l.created_at DESC
+`
+
+type ListRecipeLogsByUserIDRow struct {
+	ID          int64
+	UserID      int64
+	RecipeID    int64
+	CookedOn    string
+	CreatedAt   sql.NullTime
+	RecipeSlug  string
+	RecipeTitle string
+}
+
+func (q *Queries) ListRecipeLogsByUserID(ctx context.Context, userID int64) ([]ListRecipeLogsByUserIDRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecipeLogsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecipeLogsByUserIDRow
+	for rows.Next() {
+		var i ListRecipeLogsByUserIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.RecipeID,
+			&i.CookedOn,
+			&i.CreatedAt,
+			&i.RecipeSlug,
+			&i.RecipeTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecipes = `-- name: ListRecipes :many
 SELECT id, slug, title, source, instructions, created_at, updated_at, private FROM recipes ORDER BY title
 `
@@ -457,4 +639,44 @@ func (q *Queries) UpdateRecipe(ctx context.Context, arg UpdateRecipeParams) erro
 		arg.Slug_2,
 	)
 	return err
+}
+
+const updateRecipeLogDate = `-- name: UpdateRecipeLogDate :exec
+UPDATE recipe_logs SET cooked_on = ? WHERE id = ?
+`
+
+type UpdateRecipeLogDateParams struct {
+	CookedOn string
+	ID       int64
+}
+
+func (q *Queries) UpdateRecipeLogDate(ctx context.Context, arg UpdateRecipeLogDateParams) error {
+	_, err := q.db.ExecContext(ctx, updateRecipeLogDate, arg.CookedOn, arg.ID)
+	return err
+}
+
+const upsertUser = `-- name: UpsertUser :one
+INSERT INTO users (username, name) VALUES (?, ?)
+ON CONFLICT (username) DO UPDATE SET
+    name = excluded.name,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING id, username, name, created_at, updated_at
+`
+
+type UpsertUserParams struct {
+	Username string
+	Name     string
+}
+
+func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, upsertUser, arg.Username, arg.Name)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

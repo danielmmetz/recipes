@@ -211,15 +211,17 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 
 	funcMap := template.FuncMap{
 		"fmtQty": formatQuantity,
+		"add":    func(a, b int) int { return a + b },
 	}
 
 	pages := map[string]*template.Template{}
-	pageFiles := []string{"index.html", "view.html", "form.html"}
+	pageFiles := []string{"index.html", "view.html", "form.html", "me_logs.html", "trending.html"}
 	for _, pf := range pageFiles {
 		t, err := template.New("").Funcs(funcMap).Option("missingkey=error").ParseFS(templateFS,
 			"templates/layout.html",
 			"templates/ingredient_row.html",
 			"templates/ingredient_group.html",
+			"templates/recipe_logs_section.html",
 			"templates/"+pf,
 		)
 		if err != nil {
@@ -227,9 +229,12 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 		}
 		pages[pf] = t
 	}
-	partial, err := template.New("").Funcs(funcMap).Option("missingkey=error").ParseFS(templateFS, "templates/ingredient_row.html")
+	partial, err := template.New("").Funcs(funcMap).Option("missingkey=error").ParseFS(templateFS,
+		"templates/ingredient_row.html",
+		"templates/recipe_logs_section.html",
+	)
 	if err != nil {
-		return fmt.Errorf("parsing ingredient_row partial: %w", err)
+		return fmt.Errorf("parsing partials: %w", err)
 	}
 
 	srv := &server{
@@ -252,6 +257,11 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 	mux.HandleFunc("PUT /recipes/{slug}", srv.requiresAdmin(srv.handleUpdateRecipe))
 	mux.HandleFunc("DELETE /recipes/{slug}", srv.requiresAdmin(srv.handleDeleteRecipe))
 	mux.HandleFunc("POST /recipes/{slug}/share", srv.requiresAdmin(srv.handleShareRecipe))
+	mux.HandleFunc("POST /recipes/{slug}/logs", srv.requiresLoggedIn(srv.handleLogRecipe))
+	mux.HandleFunc("PATCH /logs/{id}", srv.requiresLoggedIn(srv.handleEditLog))
+	mux.HandleFunc("DELETE /logs/{id}", srv.requiresLoggedIn(srv.handleDeleteLog))
+	mux.HandleFunc("GET /me/logs", srv.requiresLoggedIn(srv.handleMyLogs))
+	mux.HandleFunc("GET /trending", srv.requiresLoggedIn(srv.handleTrending))
 	mux.HandleFunc("GET /ingredients/row", srv.handleIngredientRow)
 	mux.HandleFunc("GET /auth/login", srv.handleLogin)
 	mux.HandleFunc("GET /auth/callback", srv.handleCallback)

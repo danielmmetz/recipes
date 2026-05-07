@@ -64,4 +64,42 @@ SELECT id, recipe_id, token, created_at FROM share_links WHERE recipe_id = ? LIM
 -- name: CreateShareLink :one
 INSERT INTO share_links (recipe_id, token) VALUES (?, ?) RETURNING id, recipe_id, token, created_at;
 
+-- name: UpsertUser :one
+INSERT INTO users (username, name) VALUES (?, ?)
+ON CONFLICT (username) DO UPDATE SET
+    name = excluded.name,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING *;
 
+-- name: CreateRecipeLog :one
+INSERT INTO recipe_logs (user_id, recipe_id, cooked_on) VALUES (?, ?, ?) RETURNING *;
+
+-- name: GetRecipeLog :one
+SELECT * FROM recipe_logs WHERE id = ? LIMIT 1;
+
+-- name: UpdateRecipeLogDate :exec
+UPDATE recipe_logs SET cooked_on = ? WHERE id = ?;
+
+-- name: DeleteRecipeLog :exec
+DELETE FROM recipe_logs WHERE id = ?;
+
+-- name: ListRecipeLogsByRecipeID :many
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at, u.username
+FROM recipe_logs l
+JOIN users u ON u.id = l.user_id
+WHERE l.recipe_id = ?
+ORDER BY l.cooked_on DESC, l.created_at DESC;
+
+-- name: ListRecipeLogsByUserID :many
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at,
+       r.slug AS recipe_slug, r.title AS recipe_title
+FROM recipe_logs l
+JOIN recipes r ON r.id = l.recipe_id
+WHERE l.user_id = ?
+ORDER BY l.cooked_on DESC, l.created_at DESC;
+
+-- name: ListRecentRecipeLogs :many
+SELECT id, user_id, recipe_id, cooked_on, created_at
+FROM recipe_logs
+WHERE cooked_on >= ?
+ORDER BY cooked_on DESC;

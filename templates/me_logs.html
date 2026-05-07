@@ -1,0 +1,188 @@
+{{define "title"}}My Logs{{end}}
+{{define "content"}}
+<style>
+    .me-logs-header {
+        margin-bottom: 16px;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .me-logs-header h1 {
+        font-family: 'Source Serif 4', serif;
+        font-size: 26px;
+        font-weight: 600;
+    }
+    .me-logs-header .total {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+    .view-toggle {
+        display: inline-flex;
+        gap: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    .view-toggle a {
+        font-size: 12px;
+        padding: 5px 14px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        background: var(--surface);
+    }
+    .view-toggle a.active {
+        background: var(--accent);
+        color: #fff;
+    }
+    .view-toggle a:hover:not(.active) {
+        background: var(--accent-bg);
+        text-decoration: none;
+    }
+    .me-logs-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .me-logs-list li {
+        display: grid;
+        grid-template-columns: 110px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+    }
+    .me-logs-list .date {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .me-logs-list .recipe-link {
+        font-size: 14px;
+        color: var(--text);
+        text-decoration: none;
+    }
+    .me-logs-list .recipe-link:hover { color: var(--accent); }
+    .me-logs-list .actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .by-recipe-group {
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+    }
+    .by-recipe-group .group-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+    .by-recipe-group .group-head .recipe-link {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        text-decoration: none;
+    }
+    .by-recipe-group .group-head .recipe-link:hover { color: var(--accent); }
+    .by-recipe-group .group-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .by-recipe-group ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .by-recipe-group li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .empty-state {
+        color: var(--text-muted);
+        font-size: 14px;
+        margin-top: 12px;
+    }
+</style>
+
+<div class="me-logs-header">
+    <h1>My Logs</h1>
+    <span class="total">{{.TotalLogs}} log{{if ne .TotalLogs 1}}s{{end}}</span>
+</div>
+
+<div class="view-toggle">
+    <a href="/me/logs?view=chronological" class="{{if eq .View "chronological"}}active{{end}}">By date</a>
+    <a href="/me/logs?view=by-recipe" class="{{if eq .View "by-recipe"}}active{{end}}">By recipe</a>
+</div>
+
+{{if eq .View "chronological"}}
+    {{if .Chronological}}
+    <ul class="me-logs-list">
+        {{range .Chronological}}
+        <li>
+            <span class="date">{{.CookedOn}}</span>
+            <a class="recipe-link" href="/recipes/{{.RecipeSlug}}">{{.RecipeTitle}}</a>
+            <span class="actions">
+                <form hx-patch="/logs/{{.ID}}"
+                      hx-trigger="change from:find input"
+                      hx-swap="none">
+                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
+                </form>
+                <button type="button"
+                        class="btn btn-mini btn-danger"
+                        hx-delete="/logs/{{.ID}}"
+                        hx-swap="delete"
+                        hx-target="closest li"
+                        hx-confirm="Delete this log?">delete</button>
+            </span>
+        </li>
+        {{end}}
+    </ul>
+    {{else}}
+    <p class="empty-state">No logs yet. Find a recipe and log when you make it.</p>
+    {{end}}
+{{else}}
+    {{if .ByRecipe}}
+    {{range .ByRecipe}}
+    <div class="by-recipe-group">
+        <div class="group-head">
+            <a class="recipe-link" href="/recipes/{{.RecipeSlug}}">{{.RecipeTitle}}</a>
+            <span class="group-meta">{{.Count}} log{{if ne .Count 1}}s{{end}} · most recent {{.MostRecent}}</span>
+        </div>
+        <ul>
+            {{range .Logs}}
+            <li>
+                <form hx-patch="/logs/{{.ID}}"
+                      hx-trigger="change from:find input"
+                      hx-swap="none">
+                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
+                </form>
+                <button type="button"
+                        class="btn btn-mini btn-danger"
+                        hx-delete="/logs/{{.ID}}"
+                        hx-swap="delete"
+                        hx-target="closest li"
+                        hx-confirm="Delete this log?">delete</button>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+    {{else}}
+    <p class="empty-state">No logs yet. Find a recipe and log when you make it.</p>
+    {{end}}
+{{end}}
+
+<a href="/" class="back-link" style="display:inline-block;margin-top:24px;font-size:12px;color:var(--text-muted);">← All recipes</a>
+{{end}}

@@ -1,0 +1,118 @@
+{{define "recipe_logs_section"}}
+<section class="logs-section" id="logs-section">
+    {{if not .Auth.IsLoggedIn}}
+        {{if and .AuthEnabled (gt .TotalLogs 0)}}
+        <div class="section-label">Logs</div>
+        <p class="logs-summary">{{.TotalLogs}} log{{if ne .TotalLogs 1}}s{{end}}.
+            <a href="/auth/login?redirect=/recipes/{{.Recipe.Slug}}">Log in</a> to log a make and see who's made this.</p>
+        {{end}}
+    {{else}}
+        <div class="section-label">Logs</div>
+        <div class="logs-summary">
+            {{if .MyLogs}}
+            <span>You've logged this {{len .MyLogs}} time{{if ne (len .MyLogs) 1}}s{{end}}.</span>
+            {{else}}
+            <span>You haven't logged this yet.</span>
+            {{end}}
+            {{if gt .OthersLogs 0}}
+            <span>{{.OthersUsers}} other{{if ne .OthersUsers 1}}s{{end}} logged it {{.OthersLogs}} time{{if ne .OthersLogs 1}}s{{end}}.</span>
+            {{end}}
+            <span class="logs-total">Total: {{.TotalLogs}}.</span>
+        </div>
+        <form class="log-it-form"
+              hx-post="/recipes/{{.Recipe.Slug}}/logs"
+              hx-target="#logs-section"
+              hx-swap="outerHTML">
+            <input type="date" name="cooked_on" class="form-input log-date-input" required>
+            <button type="submit" class="btn btn-primary">Log it</button>
+        </form>
+
+        <details class="logs-details">
+            <summary>Show details</summary>
+            <div class="logs-detail-body">
+                {{if .MyLogs}}
+                <div class="logs-block">
+                    <div class="logs-block-label">Your logs</div>
+                    <ul class="logs-list">
+                        {{range .MyLogs}}
+                        <li class="log-row">
+                            <form class="log-edit-form"
+                                  hx-patch="/logs/{{.ID}}"
+                                  hx-target="#logs-section"
+                                  hx-swap="outerHTML"
+                                  hx-trigger="change from:find input">
+                                <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
+                            </form>
+                            <button type="button"
+                                    class="btn btn-mini btn-danger"
+                                    hx-delete="/logs/{{.ID}}"
+                                    hx-target="#logs-section"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Delete this log?">delete</button>
+                        </li>
+                        {{end}}
+                    </ul>
+                </div>
+                {{end}}
+
+                {{if .OtherSummaries}}
+                <div class="logs-block">
+                    <div class="logs-block-label">Others</div>
+                    <p class="others-summary">
+                        {{range $i, $s := .OtherSummaries}}{{if $i}}, {{end}}{{$s.Username}} ×{{$s.Count}}{{end}}
+                    </p>
+                    {{if .Auth.IsAdmin}}
+                    <details class="logs-admin-details">
+                        <summary>Show individual entries</summary>
+                        <ul class="logs-list">
+                            {{range .OtherLogs}}
+                            <li class="log-row">
+                                <span class="log-row-user">{{.Username}}</span>
+                                <form class="log-edit-form"
+                                      hx-patch="/logs/{{.ID}}"
+                                      hx-target="#logs-section"
+                                      hx-swap="outerHTML"
+                                      hx-trigger="change from:find input">
+                                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
+                                </form>
+                                <button type="button"
+                                        class="btn btn-mini btn-danger"
+                                        hx-delete="/logs/{{.ID}}"
+                                        hx-target="#logs-section"
+                                        hx-swap="outerHTML"
+                                        hx-confirm="Delete this log?">delete</button>
+                            </li>
+                            {{end}}
+                        </ul>
+                    </details>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </details>
+    {{end}}
+</section>
+<script>
+(function() {
+    var section = document.getElementById('logs-section');
+    if (!section) return;
+    // Default the [Log it] date input to the user's local today.
+    var input = section.querySelector('.log-it-form .log-date-input');
+    if (input && !input.value) {
+        var d = new Date();
+        var iso = d.toLocaleDateString('en-CA');
+        input.value = iso;
+        input.max = iso;
+    }
+    // Restore <details> open state across htmx swaps.
+    var key = 'logs-details-open:' + (section.dataset.recipe || location.pathname);
+    var details = section.querySelector('.logs-details');
+    if (details) {
+        if (localStorage.getItem(key) === '1') details.open = true;
+        details.addEventListener('toggle', function() {
+            localStorage.setItem(key, details.open ? '1' : '0');
+        });
+    }
+})();
+</script>
+{{end}}

@@ -247,6 +247,10 @@
         <div class="inner">
             <a href="/" class="logo">Recipes</a>
             <div class="nav-actions">
+                {{if .Auth.IsLoggedIn}}
+                <a href="/trending" class="new-btn" style="border-color:var(--border);color:var(--text-secondary);">Trending</a>
+                <a href="/me/logs" class="new-btn" style="border-color:var(--border);color:var(--text-secondary);">My Logs</a>
+                {{end}}
                 {{if .Auth.IsAdmin}}
                 <a href="/recipes/new" class="new-btn">+ New Recipe</a>
                 {{else if .AuthEnabled}}

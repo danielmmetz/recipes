@@ -36,6 +36,14 @@ type Recipe struct {
 	Private      int64
 }
 
+type RecipeLog struct {
+	ID        int64
+	UserID    int64
+	RecipeID  int64
+	CookedOn  string
+	CreatedAt sql.NullTime
+}
+
 type RecipeTag struct {
 	RecipeID int64
 	TagID    int64
@@ -51,4 +59,12 @@ type ShareLink struct {
 type Tag struct {
 	ID   int64
 	Name string
+}
+
+type User struct {
+	ID        int64
+	Username  string
+	Name      string
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
 }

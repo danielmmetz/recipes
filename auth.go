@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/danielmmetz/recipes/db/generated"
 	"golang.org/x/oauth2"
 )
 
@@ -21,6 +22,8 @@ import (
 type AuthInfo struct {
 	IsLoggedIn bool
 	IsAdmin    bool
+	UserID     int64
+	Username   string
 	Email      string
 	Name       string
 	Groups     []string
@@ -69,6 +72,8 @@ func (c authConfig) oauth2Config() *oauth2.Config {
 
 // session represents an authenticated user session.
 type session struct {
+	UserID    int64
+	Username  string
 	Email     string
 	Name      string
 	Groups    []string
@@ -160,9 +165,11 @@ func (a *authState) consume(state string) (pendingAuth, bool) {
 
 // oidcUserInfo is the response from the userinfo endpoint.
 type oidcUserInfo struct {
-	Email  string   `json:"email"`
-	Name   string   `json:"name"`
-	Groups []string `json:"groups"`
+	Sub      string   `json:"sub"`
+	Email    string   `json:"email"`
+	Name     string   `json:"name"`
+	Username string   `json:"preferred_username"`
+	Groups   []string `json:"groups"`
 }
 
 // authMiddleware injects AuthInfo into the request context.
@@ -174,6 +181,8 @@ func (s *server) authMiddleware(next http.Handler) http.Handler {
 				ai = AuthInfo{
 					IsLoggedIn: true,
 					IsAdmin:    slices.Contains(sess.Groups, "recipes_admin"),
+					UserID:     sess.UserID,
+					Username:   sess.Username,
 					Email:      sess.Email,
 					Name:       sess.Name,
 					Groups:     sess.Groups,
@@ -183,6 +192,24 @@ func (s *server) authMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), authContextKey, ai)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// requiresLoggedIn wraps a handler to require any authenticated user.
+// If auth is disabled, the handler is allowed through (backward compat).
+func (s *server) requiresLoggedIn(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.auth.enabled() {
+			next(w, r)
+			return
+		}
+		ai := authInfoFromContext(r.Context())
+		if !ai.IsLoggedIn {
+			loginURL := "/auth/login?redirect=" + url.QueryEscape(r.URL.RequestURI())
+			http.Redirect(w, r, loginURL, http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
 }
 
 // requiresAdmin wraps a handler to require admin access.
@@ -289,7 +316,29 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username := userInfo.Username
+	if username == "" {
+		username = userInfo.Sub
+	}
+	if username == "" {
+		s.logger.Error("userinfo missing both preferred_username and sub")
+		http.Error(w, "authentication failed", http.StatusInternalServerError)
+		return
+	}
+
+	user, err := s.queries.UpsertUser(r.Context(), generated.UpsertUserParams{
+		Username: username,
+		Name:     userInfo.Name,
+	})
+	if err != nil {
+		s.logger.Error("upserting user", "error", err, "username", username)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
 	sessID, err := s.sessions.create(session{
+		UserID:    user.ID,
+		Username:  user.Username,
 		Email:     userInfo.Email,
 		Name:      userInfo.Name,
 		Groups:    userInfo.Groups,
