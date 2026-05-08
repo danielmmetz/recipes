@@ -99,7 +99,8 @@ WHERE l.user_id = ?
 ORDER BY l.cooked_on DESC, l.created_at DESC;
 
 -- name: ListRecentRecipeLogs :many
-SELECT id, user_id, recipe_id, cooked_on, created_at
-FROM recipe_logs
-WHERE cooked_on >= ?
-ORDER BY cooked_on DESC;
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at, u.username
+FROM recipe_logs l
+JOIN users u ON u.id = l.user_id
+WHERE l.cooked_on >= ?
+ORDER BY l.cooked_on DESC;

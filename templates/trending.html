@@ -1,9 +1,7 @@
 {{define "title"}}Trending{{end}}
 {{define "content"}}
 <style>
-    .trending-header {
-        margin-bottom: 16px;
-    }
+    .trending-header { margin-bottom: 6px; }
     .trending-header h1 {
         font-family: 'Source Serif 4', serif;
         font-size: 26px;
@@ -14,22 +12,54 @@
         font-size: 12px;
         color: var(--text-muted);
     }
+    .window-toggle {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+        margin: 16px 0 22px;
+    }
+    .window-toggle a {
+        font-size: 12px;
+        padding: 6px 14px;
+        color: var(--text-secondary);
+        background: var(--surface);
+        text-decoration: none;
+    }
+    .window-toggle a.active {
+        background: var(--accent);
+        color: #fff;
+    }
+    .window-toggle a:hover:not(.active) {
+        background: var(--accent-bg);
+    }
+
     .trending-list {
         list-style: none;
         display: flex;
         flex-direction: column;
         gap: 6px;
+        padding: 0;
     }
-    .trending-list li {
-        display: grid;
-        grid-template-columns: 30px 1fr auto;
-        align-items: baseline;
-        gap: 12px;
-        padding: 10px 14px;
+    .trending-list details {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius);
+        transition: border-color 0.15s;
     }
+    .trending-list details[open] { border-color: var(--accent-light); }
+    .trending-list summary {
+        display: grid;
+        grid-template-columns: 30px 1fr auto auto 14px;
+        align-items: baseline;
+        gap: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+    }
+    .trending-list summary::-webkit-details-marker { display: none; }
+    .trending-list summary:hover { background: var(--border-light); border-radius: var(--radius); }
     .trending-list .rank {
         font-family: 'Source Serif 4', serif;
         font-size: 18px;
@@ -46,31 +76,152 @@
     .trending-list .meta {
         font-size: 11px;
         color: var(--text-muted);
+        min-width: 90px;
+        text-align: right;
     }
+    .trending-list .chev {
+        font-size: 10px;
+        color: var(--text-muted);
+        transition: transform 0.15s;
+        align-self: center;
+    }
+    .trending-list details[open] .chev { transform: rotate(180deg); }
+
+    .private-badge {
+        font-size: 10px;
+        font-weight: 500;
+        background: var(--border);
+        color: var(--text-muted);
+        padding: 1px 7px;
+        border-radius: var(--radius-full);
+        margin-left: 4px;
+        vertical-align: middle;
+    }
+
+    .movement {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: var(--radius-full);
+        min-width: 48px;
+        justify-content: center;
+    }
+    .movement.up   { background: #e6efe2; color: var(--accent); }
+    .movement.down { background: #fbe9d4; color: #b3651f; }
+    .movement.flat { background: var(--border-light); color: var(--text-muted); }
+    .movement.new  { background: #e1eaf2; color: #3f6b8e; }
+
+    .row-detail {
+        border-top: 1px solid var(--border-light);
+        padding: 12px 14px 14px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+    @media (max-width: 540px) {
+        .row-detail { grid-template-columns: 1fr; gap: 12px; }
+    }
+    .detail-block-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .users-bar { display: flex; flex-direction: column; gap: 4px; }
+    .user-bar-row {
+        display: grid;
+        grid-template-columns: 70px 1fr 28px;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+    }
+    .user-bar-row .uname { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-bar-row .uname.you { color: var(--accent); font-weight: 500; }
+    .user-bar-row .bar {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--accent-bg);
+        overflow: hidden;
+    }
+    .user-bar-row .bar-fill {
+        height: 100%;
+        background: var(--accent);
+    }
+    .user-bar-row .num { font-size: 11px; color: var(--text-muted); text-align: right; }
+
+    .spark { width: 100%; height: 36px; }
+    .detail-meta { margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+    .detail-meta a { color: var(--accent); }
+
     .empty-state {
         color: var(--text-muted);
         font-size: 14px;
-        margin-top: 12px;
+        margin-top: 16px;
     }
 </style>
 
 <div class="trending-header">
     <h1>Trending</h1>
-    <p class="subtitle">Recent logs, weighted with a 30-day half-life. Repeat logs from the same user are dampened so a single enthusiast can't dominate.</p>
+    <p class="subtitle">Pick a window. Movement compares to the prior window of equal length. Click any row for the per-cook breakdown.</p>
+</div>
+
+<div class="window-toggle">
+    {{range .Windows}}
+    <a href="/trending?window={{.Key}}" class="{{if .Active}}active{{end}}">{{.Label}}</a>
+    {{end}}
 </div>
 
 {{if .Entries}}
 <ol class="trending-list">
-    {{range $i, $e := .Entries}}
+    {{range .Entries}}
     <li>
-        <span class="rank">{{add $i 1}}</span>
-        <a class="recipe-link" href="/recipes/{{$e.Recipe.Slug}}">{{$e.Recipe.Title}}{{if $e.Recipe.Private}} <span class="private-badge">Private</span>{{end}}</a>
-        <span class="meta">{{$e.LogsCounted}} log{{if ne $e.LogsCounted 1}}s{{end}} · {{$e.DistinctUsers}} user{{if ne $e.DistinctUsers 1}}s{{end}}</span>
+    <details>
+        <summary>
+            <span class="rank">{{.Rank}}</span>
+            <a class="recipe-link" href="/recipes/{{.Recipe.Slug}}">{{.Recipe.Title}}{{if .Recipe.Private}} <span class="private-badge">Private</span>{{end}}</a>
+            {{if .Movement}}<span class="movement {{.MovementCls}}">{{.Movement}}</span>{{else}}<span></span>{{end}}
+            <span class="meta">{{.LogsCounted}} log{{if ne .LogsCounted 1}}s{{end}} · {{.DistinctUsers}} cook{{if ne .DistinctUsers 1}}s{{end}}</span>
+            <span class="chev">▾</span>
+        </summary>
+        <div class="row-detail">
+            <div>
+                <div class="detail-block-label">Who's logged it</div>
+                {{if .UserBars}}
+                <div class="users-bar">
+                    {{range .UserBars}}
+                    <div class="user-bar-row">
+                        <span class="uname{{if .IsYou}} you{{end}}">{{if .IsYou}}you{{else}}{{.Username}}{{end}}</span>
+                        <span class="bar"><span class="bar-fill" style="width: {{.Width}}%;"></span></span>
+                        <span class="num">{{.Count}}</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{else}}
+                <p class="detail-meta">No logs yet.</p>
+                {{end}}
+            </div>
+            <div>
+                <div class="detail-block-label">Activity (last 13 weeks)</div>
+                <svg class="spark" viewBox="0 0 100 36" preserveAspectRatio="none">
+                    <polyline points="{{.SparkArea}}" fill="#5c6b54" fill-opacity="0.1" stroke="none"/>
+                    <polyline points="{{.SparkLine}}" fill="none" stroke="#5c6b54" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+                {{if gt .SparkPeak 0}}
+                <p class="detail-meta">Peak: {{.SparkPeak}} log{{if ne .SparkPeak 1}}s{{end}} in a week.</p>
+                {{end}}
+            </div>
+        </div>
+    </details>
     </li>
     {{end}}
 </ol>
 {{else}}
-<p class="empty-state">No logs in the last year yet. Once people start logging makes, this page will fill in.</p>
+<p class="empty-state">No logs in this window yet. Try a longer one — or go log something!</p>
 {{end}}
 
 <a href="/" class="back-link" style="display:inline-block;margin-top:24px;font-size:12px;color:var(--text-muted);">← All recipes</a>

@@ -418,27 +418,38 @@ func (q *Queries) ListPublicRecipes(ctx context.Context) ([]Recipe, error) {
 }
 
 const listRecentRecipeLogs = `-- name: ListRecentRecipeLogs :many
-SELECT id, user_id, recipe_id, cooked_on, created_at
-FROM recipe_logs
-WHERE cooked_on >= ?
-ORDER BY cooked_on DESC
+SELECT l.id, l.user_id, l.recipe_id, l.cooked_on, l.created_at, u.username
+FROM recipe_logs l
+JOIN users u ON u.id = l.user_id
+WHERE l.cooked_on >= ?
+ORDER BY l.cooked_on DESC
 `
 
-func (q *Queries) ListRecentRecipeLogs(ctx context.Context, cookedOn string) ([]RecipeLog, error) {
+type ListRecentRecipeLogsRow struct {
+	ID        int64
+	UserID    int64
+	RecipeID  int64
+	CookedOn  string
+	CreatedAt sql.NullTime
+	Username  string
+}
+
+func (q *Queries) ListRecentRecipeLogs(ctx context.Context, cookedOn string) ([]ListRecentRecipeLogsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listRecentRecipeLogs, cookedOn)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RecipeLog
+	var items []ListRecentRecipeLogsRow
 	for rows.Next() {
-		var i RecipeLog
+		var i ListRecentRecipeLogsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
 			&i.RecipeID,
 			&i.CookedOn,
 			&i.CreatedAt,
+			&i.Username,
 		); err != nil {
 			return nil, err
 		}
