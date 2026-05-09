@@ -53,6 +53,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
         }
         nav .logo {
             font-family: 'Source Serif 4', serif;
@@ -62,14 +63,19 @@
             text-decoration: none;
         }
         nav .new-btn {
+            display: inline-flex;
+            align-items: center;
+            height: 30px;
+            box-sizing: border-box;
             font-size: 12px;
             font-weight: 500;
             color: var(--accent);
             text-decoration: none;
             border: 1px solid var(--accent-light);
-            padding: 5px 14px;
+            padding: 0 14px;
             border-radius: var(--radius-full);
             transition: all 0.15s;
+            white-space: nowrap;
         }
         nav .new-btn:hover {
             background: var(--accent);
@@ -89,12 +95,15 @@
         nav .nav-actions {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
         nav .auth-btn {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
+            height: 30px;
+            width: 30px;
+            box-sizing: border-box;
             color: var(--text-muted);
             text-decoration: none;
             transition: color 0.15s;
@@ -106,6 +115,13 @@
         }
         nav .auth-btn:hover { color: var(--accent); }
         nav .auth-btn.logged-in { color: var(--accent); }
+        @media (max-width: 540px) {
+            nav .inner { padding: 10px 14px; gap: 8px; }
+            nav .nav-actions { gap: 5px; }
+            nav .new-btn { padding: 0 10px; font-size: 11px; height: 28px; }
+            nav .auth-btn { height: 28px; width: 28px; }
+            nav .auth-btn svg { width: 18px; height: 18px; }
+        }
 
         main {
             max-width: 700px;

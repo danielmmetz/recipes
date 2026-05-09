@@ -212,6 +212,16 @@ func runServer(ctx context.Context, logger *slog.Logger, dbPath string, listenAd
 	funcMap := template.FuncMap{
 		"fmtQty": formatQuantity,
 		"add":    func(a, b int) int { return a + b },
+		"fmtCookedOn": func(d string) string {
+			t, err := time.Parse("2006-01-02", d)
+			if err != nil {
+				return d
+			}
+			if t.Year() == time.Now().Year() {
+				return t.Format("Jan 2")
+			}
+			return t.Format("Jan 2, 2006")
+		},
 	}
 
 	pages := map[string]*template.Template{}

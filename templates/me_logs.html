@@ -49,7 +49,7 @@
     }
     .me-logs-list li {
         display: grid;
-        grid-template-columns: 110px 1fr auto;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
         gap: 10px;
         padding: 8px 10px;
@@ -60,17 +60,76 @@
     .me-logs-list .date {
         font-size: 13px;
         color: var(--text-secondary);
+        white-space: nowrap;
     }
     .me-logs-list .recipe-link {
         font-size: 14px;
         color: var(--text);
         text-decoration: none;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .me-logs-list .recipe-link:hover { color: var(--accent); }
     .me-logs-list .actions {
         display: flex;
-        gap: 6px;
+        gap: 4px;
         align-items: center;
+    }
+    .by-recipe-group .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .by-recipe-group .row .date {
+        font-size: 13px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+    .by-recipe-group .row .actions {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
+    .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0;
+        transition: all 0.12s;
+    }
+    .icon-btn:hover {
+        background: var(--accent-bg);
+        color: var(--text);
+    }
+    .icon-btn-danger:hover {
+        color: var(--danger);
+        border-color: var(--danger-border);
+        background: var(--danger-bg);
+    }
+    .log-edit-form {
+        display: inline-flex;
+        position: relative;
+    }
+    .log-date-hidden {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        padding: 0;
     }
     .by-recipe-group {
         margin-bottom: 16px;
@@ -131,20 +190,32 @@
     <ul class="me-logs-list">
         {{range .Chronological}}
         <li>
-            <span class="date">{{.CookedOn}}</span>
+            <span class="date">{{fmtCookedOn .CookedOn}}</span>
             <a class="recipe-link" href="/recipes/{{.RecipeSlug}}">{{.RecipeTitle}}</a>
             <span class="actions">
-                <form hx-patch="/logs/{{.ID}}"
+                <form class="log-edit-form"
+                      hx-patch="/logs/{{.ID}}"
                       hx-trigger="change from:find input"
                       hx-swap="none">
-                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
+                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="log-date-hidden" tabindex="-1" aria-hidden="true">
+                    <button type="button" class="icon-btn" title="Edit date" aria-label="Edit date" onclick="editLogDate(this)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                    </button>
                 </form>
                 <button type="button"
-                        class="btn btn-mini btn-danger"
+                        class="icon-btn icon-btn-danger"
+                        title="Delete log"
+                        aria-label="Delete log"
                         hx-delete="/logs/{{.ID}}"
                         hx-swap="delete"
                         hx-target="closest li"
-                        hx-confirm="Delete this log?">delete</button>
+                        hx-confirm="Delete this log?">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                </button>
             </span>
         </li>
         {{end}}
@@ -158,22 +229,37 @@
     <div class="by-recipe-group">
         <div class="group-head">
             <a class="recipe-link" href="/recipes/{{.RecipeSlug}}">{{.RecipeTitle}}</a>
-            <span class="group-meta">{{.Count}} log{{if ne .Count 1}}s{{end}} · most recent {{.MostRecent}}</span>
+            <span class="group-meta">{{.Count}} log{{if ne .Count 1}}s{{end}} · most recent {{fmtCookedOn .MostRecent}}</span>
         </div>
         <ul>
             {{range .Logs}}
-            <li>
-                <form hx-patch="/logs/{{.ID}}"
-                      hx-trigger="change from:find input"
-                      hx-swap="none">
-                    <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
-                </form>
-                <button type="button"
-                        class="btn btn-mini btn-danger"
-                        hx-delete="/logs/{{.ID}}"
-                        hx-swap="delete"
-                        hx-target="closest li"
-                        hx-confirm="Delete this log?">delete</button>
+            <li class="row">
+                <span class="date">{{fmtCookedOn .CookedOn}}</span>
+                <span class="actions">
+                    <form class="log-edit-form"
+                          hx-patch="/logs/{{.ID}}"
+                          hx-trigger="change from:find input"
+                          hx-swap="none">
+                        <input type="date" name="cooked_on" value="{{.CookedOn}}" class="log-date-hidden" tabindex="-1" aria-hidden="true">
+                        <button type="button" class="icon-btn" title="Edit date" aria-label="Edit date" onclick="editLogDate(this)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                            </svg>
+                        </button>
+                    </form>
+                    <button type="button"
+                            class="icon-btn icon-btn-danger"
+                            title="Delete log"
+                            aria-label="Delete log"
+                            hx-delete="/logs/{{.ID}}"
+                            hx-swap="delete"
+                            hx-target="closest li"
+                            hx-confirm="Delete this log?">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                    </button>
+                </span>
             </li>
             {{end}}
         </ul>
@@ -183,6 +269,18 @@
     <p class="empty-state">No logs yet. Find a recipe and log when you make it.</p>
     {{end}}
 {{end}}
+
+<script>
+function editLogDate(btn) {
+    var input = btn.parentElement.querySelector('input[type=date]');
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+        try { input.showPicker(); return; } catch (e) {}
+    }
+    input.focus();
+    input.click();
+}
+</script>
 
 <a href="/" class="back-link" style="display:inline-block;margin-top:24px;font-size:12px;color:var(--text-muted);">← All recipes</a>
 {{end}}
