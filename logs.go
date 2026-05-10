@@ -346,8 +346,8 @@ type trendingWindow struct {
 
 func trendingWindows() []trendingWindow {
 	return []trendingWindow{
-		{Key: "week", Label: "This week", Days: 7},
-		{Key: "month", Label: "This month", Days: 30},
+		{Key: "week", Label: "Week", Days: 7},
+		{Key: "month", Label: "Month", Days: 30},
 		{Key: "90days", Label: "90 days", Days: 90},
 		{Key: "alltime", Label: "All time", Days: 0},
 	}

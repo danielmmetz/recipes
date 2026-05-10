@@ -66,11 +66,20 @@
         font-weight: 600;
         color: var(--accent);
     }
+    .trending-list .title-block {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
     .trending-list .recipe-link {
         font-size: 14px;
         font-weight: 600;
         color: var(--text);
         text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .trending-list .recipe-link:hover { color: var(--accent); }
     .trending-list .meta {
@@ -79,6 +88,7 @@
         min-width: 90px;
         text-align: right;
     }
+    .trending-list .meta-inline { display: none; }
     .trending-list .chev {
         font-size: 10px;
         color: var(--text-muted);
@@ -86,6 +96,30 @@
         align-self: center;
     }
     .trending-list details[open] .chev { transform: rotate(180deg); }
+    @media (max-width: 540px) {
+        .window-toggle a { padding: 6px 10px; font-size: 11px; }
+        .trending-header .subtitle { font-size: 11px; }
+        .trending-list summary {
+            grid-template-columns: 24px 1fr auto 14px;
+            gap: 8px;
+            padding: 10px 12px;
+            align-items: center;
+        }
+        .trending-list .rank { font-size: 16px; }
+        .trending-list .recipe-link { font-size: 13px; }
+        .trending-list .meta { display: none; }
+        .trending-list .meta-inline {
+            display: block;
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .movement { font-size: 10px; padding: 1px 6px; min-width: 40px; }
+        .row-detail { padding: 12px 12px 14px; }
+        .user-bar-row { grid-template-columns: 64px 1fr 24px; gap: 6px; }
+    }
 
     .private-badge {
         font-size: 10px;
@@ -183,7 +217,10 @@
     <details>
         <summary>
             <span class="rank">{{.Rank}}</span>
-            <a class="recipe-link" href="/recipes/{{.Recipe.Slug}}">{{.Recipe.Title}}{{if .Recipe.Private}} <span class="private-badge">Private</span>{{end}}</a>
+            <span class="title-block">
+                <a class="recipe-link" href="/recipes/{{.Recipe.Slug}}">{{.Recipe.Title}}{{if .Recipe.Private}} <span class="private-badge">Private</span>{{end}}</a>
+                <span class="meta-inline">{{.LogsCounted}} log{{if ne .LogsCounted 1}}s{{end}} · {{.DistinctUsers}} cook{{if ne .DistinctUsers 1}}s{{end}}</span>
+            </span>
             {{if .Movement}}<span class="movement {{.MovementCls}}">{{.Movement}}</span>{{else}}<span></span>{{end}}
             <span class="meta">{{.LogsCounted}} log{{if ne .LogsCounted 1}}s{{end}} · {{.DistinctUsers}} cook{{if ne .DistinctUsers 1}}s{{end}}</span>
             <span class="chev">▾</span>
