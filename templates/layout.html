@@ -255,6 +255,16 @@
         .text-center { text-align: center; }
         .hidden { display: none !important; }
         .contents { display: contents; }
+
+        /* Two-step delete confirmation: first click arms, second confirms. */
+        .del-btn .ico-confirm { display: none; }
+        .del-btn.confirming .ico-default { display: none; }
+        .del-btn.confirming .ico-confirm { display: inline-flex; }
+        .del-btn.confirming {
+            background: var(--danger-bg) !important;
+            border-color: var(--danger) !important;
+            color: var(--danger) !important;
+        }
     </style>
     {{block "head" .}}{{end}}
 </head>
@@ -295,5 +305,69 @@
     <main>
         {{block "content" .}}{{end}}
     </main>
+    <script>
+    // Two-step delete confirmation. First click on a .del-btn arms it (icon swaps,
+    // background turns danger). Second click within 3s — or before clicking outside —
+    // executes the delete via htmx using data-url / data-target / data-swap.
+    function armDelete(btn) {
+        if (btn.classList.contains('confirming')) {
+            executeDelete(btn);
+            return;
+        }
+        document.querySelectorAll('.del-btn.confirming').forEach(function(b) {
+            if (b !== btn) {
+                b.classList.remove('confirming');
+                if (b._delTimer) clearTimeout(b._delTimer);
+            }
+        });
+        btn.classList.add('confirming');
+        btn._delTimer = setTimeout(function() {
+            btn.classList.remove('confirming');
+        }, 3000);
+    }
+    function executeDelete(btn) {
+        var url = btn.dataset.url;
+        if (!url) return;
+        var targetSel = btn.dataset.target || 'closest:li';
+        var swap = btn.dataset.swap || 'delete';
+        var target;
+        if (targetSel.indexOf('closest:') === 0) {
+            target = btn.closest(targetSel.substring(8));
+        } else {
+            target = document.querySelector(targetSel);
+        }
+        if (!target) return;
+        btn.classList.remove('confirming');
+        if (btn._delTimer) clearTimeout(btn._delTimer);
+        htmx.ajax('DELETE', url, { target: target, swap: swap });
+    }
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.del-btn');
+        if (btn) {
+            e.preventDefault();
+            armDelete(btn);
+            return;
+        }
+        document.querySelectorAll('.del-btn.confirming').forEach(function(b) {
+            b.classList.remove('confirming');
+            if (b._delTimer) clearTimeout(b._delTimer);
+        });
+    });
+
+    // Format YYYY-MM-DD as "May 9" (current year) or "May 9, 2024" — mirrors Go fmtCookedOn.
+    function formatCookedOn(d) {
+        if (!d) return '';
+        var parts = d.split('-');
+        if (parts.length !== 3) return d;
+        var date = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+        if (isNaN(date.getTime())) return d;
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var s = months[date.getMonth()] + ' ' + date.getDate();
+        if (date.getFullYear() !== new Date().getFullYear()) {
+            s += ', ' + date.getFullYear();
+        }
+        return s;
+    }
+    </script>
 </body>
 </html>

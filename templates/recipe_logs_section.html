@@ -89,11 +89,15 @@
                         <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
                     </form>
                     <button type="button"
-                            class="btn mini danger"
-                            hx-delete="/logs/{{.ID}}"
-                            hx-target="#logs-section"
-                            hx-swap="outerHTML"
-                            hx-confirm="Delete this log?">×</button>
+                            class="btn mini danger del-btn"
+                            title="Delete log"
+                            aria-label="Delete log"
+                            data-url="/logs/{{.ID}}"
+                            data-target="#logs-section"
+                            data-swap="outerHTML">
+                        <span class="ico-default">×</span>
+                        <span class="ico-confirm">✓</span>
+                    </button>
                 </li>
                 {{end}}
             </ul>
@@ -120,11 +124,15 @@
                             <input type="date" name="cooked_on" value="{{.CookedOn}}" class="form-input log-date-input">
                         </form>
                         <button type="button"
-                                class="btn mini danger"
-                                hx-delete="/logs/{{.ID}}"
-                                hx-target="#logs-section"
-                                hx-swap="outerHTML"
-                                hx-confirm="Delete this log?">×</button>
+                                class="btn mini danger del-btn"
+                                title="Delete log"
+                                aria-label="Delete log"
+                                data-url="/logs/{{.ID}}"
+                                data-target="#logs-section"
+                                data-swap="outerHTML">
+                            <span class="ico-default">×</span>
+                            <span class="ico-confirm">✓</span>
+                        </button>
                     </li>
                     {{end}}
                 </ul>
